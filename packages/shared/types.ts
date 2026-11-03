@@ -1,0 +1,35 @@
+import type * as S from "../../db/schema";
+import type { Role, estimateArrival } from "../domain";
+export type Trip = typeof S.trips.$inferSelect;
+export type Route = typeof S.routes.$inferSelect;
+export type State = {
+  actor: {
+    orgId: string;
+    userId: string;
+    ownerId: string;
+    role: Role;
+    name: string;
+    demo: boolean;
+  };
+  organization: { id: string; name: string; demo: boolean; maxWait: number };
+  vehicles: (typeof S.vehicles.$inferSelect)[];
+  drivers: (typeof S.drivers.$inferSelect)[];
+  routes: Route[];
+  students: (typeof S.students.$inferSelect)[];
+  trips: Trip[];
+  locations: (typeof S.locations.$inferSelect)[];
+  notices: (typeof S.notices.$inferSelect & { read: boolean })[];
+  incidents: (typeof S.incidents.$inferSelect)[];
+  events: (typeof S.tripEvents.$inferSelect)[];
+  boarding: (typeof S.boarding.$inferSelect)[];
+  absences: (typeof S.absences.$inferSelect)[];
+  maintenance: (typeof S.maintenance.$inferSelect)[];
+  expenses: (typeof S.expenses.$inferSelect)[];
+  calendar: (typeof S.calendar.$inferSelect)[];
+  audit: (typeof S.audit.$inferSelect)[];
+  guardianLinks: (typeof S.guardianLinks.$inferSelect)[];
+  memberships: (typeof S.memberships.$inferSelect)[];
+  estimates: ({ tripId: string } & ReturnType<typeof estimateArrival>)[];
+  serverTime: number;
+  routingConfigured: boolean;
+};
