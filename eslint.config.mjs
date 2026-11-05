@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   {
     ignores: [
-      "node_modules/**",
+      "**/node_modules/**", "apps/driver/android/**", "apps/driver/ios/**", "apps/driver/dist/**", "apps/driver/.expo/**",
       "dist/**",
       ".vinext/**",
       ".wrangler/**",

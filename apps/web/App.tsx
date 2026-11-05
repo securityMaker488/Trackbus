@@ -83,26 +83,9 @@ import {
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } },
 });
-async function api<T = Record<string, unknown>>(
-  path: string,
-  body?: unknown,
-  method = "POST",
-): Promise<T> {
-  const r = await fetch(
-    `/api${path}`,
-    body === undefined
-      ? { credentials: "same-origin", cache: "no-store" }
-      : {
-          method,
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        },
-  );
-  const data = (await r.json()) as { error?: string };
-  if (!r.ok) throw new Error(data.error || "Não foi possível concluir");
-  return data as T;
-}
+import {api} from "./http";
+import {SmartJourney,JoinJourney} from "./SmartJourney";
+import {DemoControls} from "./DemoControls";
 const statusLabels: Record<string, string> = {
   scheduled: "Programada",
   in_progress: "Em andamento",
@@ -127,7 +110,7 @@ const statusLabels: Record<string, string> = {
   interruption: "Interrupção",
   resumed: "Retomada",
   information: "Informação",
-  assistance: "Assistência",
+  assistance: "Assistência", early:"Chegada antecipada",waiting:"Espera iniciada",wait_ended:"Espera encerrada",
 };
 const roleLabels: Record<Role, string> = {
   admin: "Administrador",
@@ -502,7 +485,7 @@ export default function TrackBus() {
           <span>Conectando sua operação…</span>
         </div>
       )}
-      <Toaster position="bottom-right" richColors closeButton />
+      <Toaster position="bottom-right" theme="dark" closeButton />
     </QueryClientProvider>
   );
 }
@@ -527,7 +510,7 @@ function App() {
   const state = useQuery({
     queryKey: ["state"],
     queryFn: () => api<State>("/state"),
-    enabled: Boolean(me.data?.actor),
+    enabled: Boolean(me.data?.actor && !me.data.actor.visitor),
     refetchInterval: 5000,
     refetchIntervalInBackground: false,
   });
@@ -564,6 +547,8 @@ function App() {
         <span>Conectando sua operação…</span>
       </div>
     );
+  if (me.data?.actor?.visitor) return <SmartJourney visitor onLeave={()=>window.location.reload()}/>;
+  if(location.pathname==="/participar")return <div className="journey-shell"><header className="journey-header"><div><span className="brand"><BusIcon/> TrackBus</span><h1>Sua viagem começa aqui.</h1><p>Entrada demonstrativa de aluno · FECT e Congretech</p></div></header><JoinJourney onJoin={()=>{qc.clear();window.location.reload();}}/><a href="#/">Voltar à operação</a></div>;
   if (me.error || me.data?.needsSetup)
     return (
       <div className="welcome">
@@ -575,26 +560,10 @@ function App() {
             trackbus<span className="brand-period">.</span>
           </div>
           <span className="eyebrow">MOBILIDADE ESCOLAR INTELIGENTE</span>
-          <h1>
-            Cada trajeto.
-            <br />
-            Mais próximo.
-          </h1>
-          <p>
-            Uma operação conectada. Da primeira parada ao último desembarque,
-            acompanhe o que importa.
-          </p>
-          <div className="welcome-features">
-            <span>
-              <Radio /> Acompanhamento de viagens
-            </span>
-            <span>
-              <ShieldCheck /> Acesso por instituição
-            </span>
-            <span>
-              <RouteIcon /> Rotas e paradas organizadas
-            </span>
-          </div>
+          <h1>Sua viagem começa aqui.</h1>
+          <p>Acompanhe seu ônibus, escolha sua parada e descubra quando sair.</p>
+          <JoinJourney onJoin={()=>{qc.clear();window.location.reload();}}/>
+          <small>Acesso da equipe de operação</small>
           {me.data?.needsSetup ? (
             <button
               className="button primary"
@@ -676,6 +645,7 @@ function App() {
       fields: [
         { name: "name", label: "Nome da viagem", value: "Ida · Manhã" },
         { name: "routeId", label: "Rota", options: routeOpts },
+        {name:"trackingMode",label:"Fonte de posição",options:[{value:"gps",label:"GPS real do motorista"},...(d.organization.demo?[{value:"simulation",label:"SIMULAÇÃO — POSIÇÃO FICTÍCIA"}]:[])]},
         { name: "vehicleId", label: "Veículo", options: vehicleOpts },
         {
           name: "driverId",
@@ -722,8 +692,11 @@ function App() {
             "interruption",
             "resumed",
             "information",
-            "assistance",
+            "assistance", "early",
           ].map((k) => ({ value: k, label: statusLabels[k] })),
+        },
+        {
+          name: "safeStop",label:"Veículo parado em segurança",options:[{value:"false",label:"Ainda não confirmado"},{value:"true",label:"Confirmo que está parado em segurança"}]
         },
         {
           name: "delayMinutes",
@@ -743,7 +716,7 @@ function App() {
         },
       ],
       transform: (x) => ({
-        ...x,
+        tripId:x.tripId,category:x.category,message:x.message,safeStop:x.safeStop==="true",
         delayMinutes: Number(x.delayMinutes),
         simulated: d.organization.demo,
       }),
@@ -1342,12 +1315,12 @@ function App() {
           )}
           {path === "/map" && (
             <>
-              {role === "student" || role === "guardian" ? (
+              {role === "student" ? <SmartJourney/> : role === "guardian" ? (
                 <Portal d={d} refresh={refresh} />
               ) : (
                 <div className="monitor-layout">
                   <div className="panel">
-                    <MapView
+                    <MapView onTripDetails={setTripId} onNotices={()=>nav("/notices")}
                       large
                       routes={d.trips
                         .filter(
@@ -1438,6 +1411,7 @@ function App() {
                       <span>v{r.version}</span>
                     </div>
                     <div className="route-card-actions">
+                      <button className="button secondary" onClick={()=>act(`/routes/${r.id}/visibility`,{published:!r.published})}>{r.published?"Ocultar dos alunos":"Publicar para alunos"}</button>
                       <button
                         className="text-button"
                         disabled={!d.routingConfigured}
@@ -1755,7 +1729,7 @@ function App() {
           {path === "/incidents" && (
             <section className="panel">
               {listTools}
-              {d.incidents.length ? (
+              {filtered(d.incidents).length ? (
                 filtered(d.incidents).map((i) => (
                   <div className="notice-row" key={i.id}>
                     <span className="notice-icon danger">
@@ -2089,7 +2063,7 @@ function App() {
                         }))}
                       margin={{ top: 20, right: 25, left: -20, bottom: 20 }}
                     >
-                      <CartesianGrid vertical={false} stroke="#eee" />
+                      <CartesianGrid vertical={false} stroke="#202020" />
                       <XAxis
                         dataKey="name"
                         tick={{ fontSize: 10 }}
@@ -2175,6 +2149,7 @@ function App() {
           )}
           {path === "/settings" && (
             <div className="settings-grid">
+              {d.organization.demo&&<DemoControls d={d} refresh={refresh}/>}
               <section className="panel settings-card">
                 <span className="settings-icon">
                   <GraduationCap />
@@ -2897,7 +2872,7 @@ function TripDetail({
                   <Bell size={15} /> Avisar passageiros
                 </button>
               </div>
-              {d.actor.role === "driver" && t.status !== "scheduled" && (
+              {d.actor.role === "driver" && t.status !== "scheduled" && t.trackingMode!=="simulation" && (
                 <div className="gps-control">
                   <button
                     className="button secondary"
@@ -2952,12 +2927,12 @@ function TripDetail({
               )}
             </div>
           )}
-          {d.actor.role === "admin" && d.organization.demo && !terminal && (
+          {d.actor.role === "admin" && d.organization.demo && t.trackingMode!=="gps" && !terminal && (
             <div className="simulator">
               <div>
                 <FlaskConical size={20} />
                 <strong>Simulador de percurso</strong>
-                <Badge>SIMULADO</Badge>
+                <Badge>SIMULAÇÃO — POSIÇÃO FICTÍCIA</Badge>
               </div>
               <p>
                 Posições fictícias publicadas no mesmo fluxo de acompanhamento.
@@ -3021,17 +2996,24 @@ function TripDetail({
   );
 }
 function Portal({ d }: { d: State; refresh: () => void }) {
-  const st = d.students[0],
+  const [selectedStudentId, setSelectedStudentId] = useState(
+      d.students[0]?.id || "",
+    ),
+    st =
+      d.students.find((s) => s.id === selectedStudentId) || d.students[0],
     t = d.trips.find(
       (t) =>
         t.routeId === st?.routeId &&
         !["completed", "cancelled"].includes(t.status),
     ),
+    [studentPosition, setStudentPosition] = useState<Point | null>(null),
     [walking, setWalking] = useState<{
       available: boolean;
       reason?: string;
       seconds?: number;
       meters?: number;
+      source?: string;
+      margin?: number;
       geometry?: [number, number][];
       recommendation?: { status: string; minutes: number | null };
     } | null>(null),
@@ -3050,6 +3032,7 @@ function Portal({ d }: { d: State; refresh: () => void }) {
           large
           routes={[t.snapshot]}
           walking={walking?.geometry}
+          studentPosition={studentPosition}
           positions={
             loc ? [{ id: t.id, label: t.name, position: loc.position }] : []
           }
@@ -3061,6 +3044,26 @@ function Portal({ d }: { d: State; refresh: () => void }) {
             ? `ACOMPANHANDO ${st.name.toUpperCase()}`
             : "SUA PRÓXIMA VIAGEM"}
         </span>
+        {d.students.length > 1 && (
+          <label>
+            Aluno vinculado
+            <select
+              aria-label="Aluno vinculado"
+              value={st.id}
+              onChange={(e) => {
+                setSelectedStudentId(e.target.value);
+                setWalking(null);
+                setStudentPosition(null);
+              }}
+            >
+              {d.students.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} · {s.className}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <h2>
           {t.status === "in_progress"
             ? "Seu ônibus está a caminho."
@@ -3103,7 +3106,8 @@ function Portal({ d }: { d: State; refresh: () => void }) {
             <strong>{time(loc?.position.timestamp || null)}</strong>
           </span>
           <span>
-            Margem de segurança<strong>3 minutos</strong>
+            Margem de segurança
+            <strong>{d.organization.safetyMargin} minutos</strong>
           </span>
         </div>
         <button
@@ -3129,13 +3133,17 @@ function Portal({ d }: { d: State; refresh: () => void }) {
             }
             navigator.geolocation.getCurrentPosition(
               async (p) => {
+                const pos = {
+                  lat: p.coords.latitude,
+                  lng: p.coords.longitude,
+                };
+                setStudentPosition(pos);
                 try {
                   setWalking(
                     await api("/walking", {
                       tripId: t.id,
                       studentId: st.id,
-                      lat: p.coords.latitude,
-                      lng: p.coords.longitude,
+                      ...pos,
                     }),
                   );
                 } catch (e) {
@@ -3175,6 +3183,9 @@ function Portal({ d }: { d: State; refresh: () => void }) {
                         : "Previsão do ônibus indisponível."}
                 </p>
                 <small>
+                  {walking.source === "osm-local"
+                    ? "Rede local de Salvador · © OpenStreetMap contributors, ODbL. "
+                    : ""}
                   Estimativa sujeita a variação. Não corra para alcançar o
                   ônibus.
                 </small>

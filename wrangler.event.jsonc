@@ -1,0 +1,6 @@
+{
+ "name":"trackbus-participantes",
+ "main":"worker/event-gateway.ts",
+ "compatibility_date":"2026-05-15",
+ "vars":{"SITE_ORIGIN":"https://trackbus-operacao-escolar.goldensla6.chatgpt.site"}
+}

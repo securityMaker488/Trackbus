@@ -126,9 +126,12 @@ export function estimateArrival(input: {
     meters: null,
     simulated: p?.source === "simulation",
   });
-  if (!p || now - p.timestamp > 60000) return no("Localização desatualizada");
+  if (!p) return no("Posição do ônibus indisponível");
+  if (now - p.timestamp > 60000) return no("Localização desatualizada");
   if (!["in_progress", "paused", "interrupted"].includes(input.status))
     return no("Viagem fora de operação");
+  if(input.status==="paused"&&Math.max(input.waitUntil||0,input.delayUntil||0)<=now)return no("Viagem pausada sem previsão de retomada");
+  if(input.status==="interrupted"&&(input.delayUntil||0)<=now)return no("Interrupção sem previsão atualizada");
   if (!r.routed && p.source !== "simulation")
     return no("Itinerário sobre vias ainda não validado");
   if (p.accuracy > 60 || !p.speed || p.speed < 1)

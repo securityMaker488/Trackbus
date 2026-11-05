@@ -17,6 +17,7 @@ async function login(page: Page) {
     page.getByRole("heading", { name: "Sua operação, em movimento." }),
   ).toBeVisible();
 }
+test.beforeAll(async({browser})=>{const ctx=await browser.newContext({baseURL:"http://127.0.0.1:5173"});try{const page=await ctx.newPage();await login(page);const state=await (await page.request.get("/api/state")).json();const headers={Origin:"http://127.0.0.1:5173"};for(const route of state.routes.filter((r:{name:string})=>r.name.includes("Rota 01")))expect((await page.request.post(`/api/routes/${route.id}/visibility`,{headers,data:{published:true}})).status()).toBe(200);expect((await page.request.post("/api/journey/prepare",{headers,data:{}})).status()).toBe(200);}finally{await ctx.close();}});
 test("cadastro persiste após recarregar; mapa, editor e páginas abrem", async ({
   page,
 }) => {
@@ -108,54 +109,13 @@ test("comunicação entre dois contextos; perfil de aluno restringe gestão", as
   await adminContext.close();
   await studentContext.close();
 });
-test("simulador publica posição e ETA para outro contexto; caminhada sem provedor é explícita", async ({
-  browser,
-}) => {
-  const adminContext = await browser.newContext({
-    baseURL: "http://127.0.0.1:5173",
-  });
-  const studentContext = await browser.newContext({
-    baseURL: "http://127.0.0.1:5173",
-  });
-  try {
-    const admin = await adminContext.newPage(),
-      student = await studentContext.newPage();
-    await login(admin);
-    await login(student);
-    await student.getByLabel("Perfil de demonstração").selectOption("student");
-    await expect(
-      student.getByRole("heading", { name: "Monitoramento", exact: true }),
-    ).toBeVisible();
-    await admin
-      .locator(".trip-card")
-      .filter({ hasText: "Horizonte 01" })
-      .click();
-    await admin
-      .getByRole("button", { name: "Iniciar simulação", exact: true })
-      .click();
-    await expect(admin.locator(".detail-facts")).toContainText(
-      /\d+–\d+ min · simulado/,
-    );
-    await expect(student.locator(".eta-big")).toContainText(
-      "minutos · simulado",
-    );
-    await admin
-      .getByRole("button", { name: "Pausar simulação", exact: true })
-      .click();
-    await student
-      .getByRole("button", { name: "Caminho até minha parada" })
-      .click();
-    await expect(
-      student.getByText(
-        "Serviço de trajetos a pé ainda não configurado. Sua localização não foi solicitada.",
-      ),
-    ).toBeVisible();
-  } finally {
-    await adminContext.close();
-    await studentContext.close();
-  }
+test("apelido, rota e parada persistem; simulador, caminhada sobre ruas e posição privada em outro navegador",async({browser})=>{
+ const adminContext=await browser.newContext({baseURL:"http://127.0.0.1:5173"}),guestContext=await browser.newContext({baseURL:"http://127.0.0.1:5173",viewport:{width:390,height:844},geolocation:{latitude:-12.9978788,longitude:-38.5130599,accuracy:5},permissions:["geolocation"]});
+ try{const admin=await adminContext.newPage(),guest=await guestContext.newPage();await login(admin);const d=await(await admin.request.get("/api/state")).json();await guest.route("https://tile.openstreetmap.org/**",r=>r.abort());await guest.goto("/#/participar");await guest.getByLabel("Como podemos te chamar?").fill("Lia");await guest.getByLabel("Escola demonstrativa").selectOption(d.organization.id);await guest.getByRole("button",{name:"Entrar no TrackBus"}).click();await expect(guest.getByRole("heading",{name:"Sua viagem, Lia."})).toBeVisible();expect((await guest.request.get("/api/state")).status()).toBe(403);
+ const sample=d.routes.find((r:{name:string})=>r.name.includes("Rota 01"));await guest.getByLabel("Rota da escola").selectOption(sample.id);await guest.getByLabel("Parada de embarque").selectOption(sample.stops[1].id);await guest.getByLabel("Favoritar rota e parada").check();await guest.getByRole("button",{name:"Salvar escolha"}).click();await admin.locator(".trip-card").filter({hasText:"Horizonte 01"}).click();await admin.getByRole("button",{name:"Iniciar simulação",exact:true}).click();await expect(guest.locator(".eta-big")).toContainText("minutos · simulado",{timeout:20000});await admin.getByRole("button",{name:"Pausar simulação",exact:true}).click();await guest.reload();await expect(guest.locator(".eta-big")).toContainText("minutos · simulado");
+ await guest.getByText(/Escolha de rota ·/).click();const field=d.routes.find((r:{name:string})=>r.name==="Circuito Congretech · GPS real");await guest.getByLabel("Rota da escola").selectOption(field.id);await guest.getByLabel("Parada de embarque").selectOption(field.stops[2].id);await guest.getByRole("button",{name:"Salvar escolha"}).click();await expect(guest.getByRole("heading",{name:"Viagem programada"})).toBeVisible();await guest.getByRole("button",{name:"Caminho até minha parada"}).click();await expect(guest.locator(".walking-result")).toContainText("727 m");await expect(guest.locator(".student-marker")).toBeVisible();expect(await guest.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await guest.screenshot({path:"work/smart-journey-v3.png",fullPage:true});
+ }finally{await guestContext.close();await adminContext.close();}
 });
-
 test("mobile sem transbordamento, navegação e acessibilidade básica", async ({
   page,
 }) => {

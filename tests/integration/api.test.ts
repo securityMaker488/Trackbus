@@ -98,13 +98,12 @@ describe("limites de confiança / autorização", () => {
     });
     expect(r.status).toBe(422);
   });
-  it("aluno vê só suas viagens e não pode criar veículos", async () => {
+  it("aluno vê rotas publicadas da escola sem vínculo administrativo e não pode editar", async () => {
     const cookie = await persona("student"),
       data = await state("owner-a", cookie);
     expect(data.students).toHaveLength(1);
-    expect(
-      data.trips.every((t) => t.routeId === data.students[0].routeId),
-    ).toBe(true);
+    expect(data.routes).toHaveLength(3);
+    expect(data.trips.some(t=>t.routeId!==data.students[0].routeId)).toBe(true);
     expect(data.audit).toHaveLength(0);
     expect(data.expenses).toHaveLength(0);
     expect(
@@ -221,7 +220,7 @@ describe("fluxo vertical persistente", () => {
       lat: route.stops[0].lat,
       lng: route.stops[0].lng,
       accuracy: 5,
-      timestamp: Date.now(),
+      timestamp: Date.now()-10000,
       speed: 5,
       heading: 0,
       source: "gps",
@@ -283,6 +282,9 @@ describe("fluxo vertical persistente", () => {
       seconds: 300,
       safeStop: true,
     };
+    expect((await req(`/trips/${t.id}/wait`,wait)).status).toBe(409);
+    const cookie=await persona("driver");
+    expect((await req(`/trips/${t.id}/location`,{lat:t.snapshot.stops[0].lat,lng:t.snapshot.stops[0].lng,accuracy:4,timestamp:Date.now(),speed:0,heading:null,source:"gps"},"owner-a",cookie)).status).toBe(200);
     expect(
       (await req(`/trips/${t.id}/wait`, { ...wait, seconds: 301 })).status,
     ).toBe(422);
@@ -341,4 +343,41 @@ describe("fluxo vertical persistente", () => {
     expect(await r.text()).toContain("Viagem integração");
     expect((await state()).audit.length).toBeGreaterThan(5);
   });
+});
+
+describe('Smart Journey V3 e credenciais de aparelhos',()=>{
+ async function join(){const result=await req('/journey/join',{schoolId:a.organization.id,name:'Visitante FECT'},'');expect(result.status).toBe(201);return result.headers.get('set-cookie')!.split(';')[0];}
+ async function native(path:string,body:unknown|undefined,token?:string){return api.fetch(new Request(origin+'/api'+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body)}),{DB});}
+ it('entrada por nome gera acesso restrito; recusa perfil elevado, outra escola e rota oculta',async()=>{
+ const cookie=await join();const result=await req('/journey/state',undefined,'',cookie);expect(result.status).toBe(200);const data=await result.json() as {name:string;routes:State['routes'];students?:unknown};expect(data.name).toBe('Visitante FECT');expect(data.students).toBeUndefined();expect(data.routes.every(r=>r.orgId===a.organization.id&&r.published)).toBe(true);
+ expect((await req('/state',undefined,'owner-a',cookie)).status).toBe(403);expect((await req('/demo/profile',{role:'admin'},'owner-a',cookie)).status).toBe(403);
+ const foreign=b.routes[0];expect((await req('/journey/select',{routeId:foreign.id,stopId:foreign.stops[0].id,favorite:true,notify:true},'',cookie)).status).toBe(404);
+ const route=a.routes[0];await req(`/routes/${route.id}/visibility`,{published:false});expect((await req('/journey/select',{routeId:route.id,stopId:route.stops[0].id,favorite:true,notify:true},'',cookie)).status).toBe(404);await req(`/routes/${route.id}/visibility`,{published:true});
+ expect((await req('/journey/leave',{},'',cookie)).status).toBe(200);expect((await req('/journey/state',undefined,'',cookie)).status).toBe(401);
+ });
+ it('prepara circuito repetível, salva preferência sem alterar alunos e calcula caminhada sobre ruas reais',async()=>{
+ const initial=(await state()).students;expect((await req('/journey/prepare',{})).status).toBe(200);expect((await req('/journey/prepare',{})).status).toBe(200);
+ const snap=await state(),routes=snap.routes.filter(r=>r.name.startsWith('Circuito Congretech'));expect(routes).toHaveLength(2);expect(snap.trips.filter(t=>routes.some(r=>r.id===t.routeId))).toHaveLength(2);
+ const route=routes.find(r=>r.name.includes('GPS real'))!,cookie=await join();expect((await req('/journey/select',{routeId:route.id,stopId:route.stops[2].id,favorite:true,notify:true},'',cookie)).status).toBe(200);
+ const response=await req('/journey/walk',{lat:route.stops[0].lat,lng:route.stops[0].lng},'',cookie);expect(response.status).toBe(200);expect(await response.json()).toMatchObject({available:true,source:'osm-local',meters:727,recommendation:{status:'unavailable'}});expect((await state()).students).toEqual(initial);
+ const outside=await req('/journey/walk',{lat:0,lng:0},'',cookie);expect(await outside.json()).toMatchObject({available:false});
+ });
+ it('pareamento único, GPS autorizado, leitura por visitante e fim de transmissão ao encerrar viagem',async()=>{
+ const snap=await state(),trip=snap.trips.find(t=>t.name.includes('Circuito Congretech')&&t.trackingMode==='gps')!,fake=snap.trips.find(t=>t.trackingMode==='simulation')!;
+ const pair=await req('/driver/pair',{driverId:trip.driverId});expect(pair.status).toBe(200);const code=(await pair.json() as {code:string}).code;
+ const grant=await native('/driver/exchange',{code});expect(grant.status).toBe(200);const token=(await grant.json() as {token:string}).token;expect((await native('/driver/exchange',{code})).status).toBe(401);expect((await native('/state',undefined,token)).status).toBe(403);expect((await native(`/trips/${fake.id}/status`,{status:'paused'},token)).status).toBe(404);
+ expect((await native(`/trips/${trip.id}/status`,{status:'in_progress'},token)).status).toBe(200);expect((await req(`/trips/${trip.id}/simulate`,{speed:7})).status).toBe(409);
+ const p={lat:trip.snapshot.stops[0].lat,lng:trip.snapshot.stops[0].lng,speed:3,accuracy:5,timestamp:Date.now(),heading:90,source:'gps'};expect((await native(`/trips/${trip.id}/location`,p,token)).status).toBe(200);
+ const cookie=await join();await req('/journey/select',{routeId:trip.routeId,stopId:trip.snapshot.stops[2].id,favorite:true,notify:true},'',cookie);
+ const journey=await req('/journey/state',undefined,'',cookie);expect(await journey.json()).toMatchObject({position:{source:'gps'},eta:{available:true,simulated:false},trip:{id:trip.id}});
+ expect((await req(`/trips/${trip.id}/location`,p,'',cookie)).status).toBe(403);expect((await native(`/trips/${trip.id}/status`,{status:'completed'},token)).status).toBe(200);expect((await native(`/trips/${trip.id}/location`,p,token)).status).toBe(409);await native('/driver/revoke',{},token);expect((await native('/driver/trips',undefined,token)).status).toBe(401);
+ });
+ it('reconcilia prazo de espera uma única vez mesmo com leituras simultâneas',async()=>{
+ const t=a.trips.find(t=>t.status==='paused')!;await DB.prepare('UPDATE trips SET wait_until=?,wait_stop_id=? WHERE id=?').bind(Date.now()-2000,t.snapshot.stops[0].id,t.id).run();await Promise.all([state(),state()]);const data=await state();expect(data.trips.find(x=>x.id===t.id)?.waitUntil).toBeNull();expect(data.notices.filter(n=>n.tripId===t.id&&n.category==='wait_ended')).toHaveLength(1);
+ });
+ it('validar origem, limites de sessão, push e fechamento da sala',async()=>{
+ const cookie=await join();expect((await req('/journey/push',{endpoint:'https://127.0.0.1/',enabled:true},'',cookie)).status).toBe(422);expect((await req('/journey/join',{schoolId:a.organization.id,name:'Pessoa',role:'admin'},'')).status).toBe(422);
+ expect((await req('/journey/select',{routeId:'x'},'',cookie,'https://invalid.test')).status).toBe(403);expect((await req('/journey/room',{roomOpen:false,safetyMargin:3})).status).toBe(200);expect((await req('/journey/state',undefined,'',cookie)).status).toBe(401);expect((await req('/journey/join',{schoolId:a.organization.id,name:'Pessoa'},'')).status).toBe(404);
+ expect((await req('/retention',{})).status).toBe(200);
+ });
 });

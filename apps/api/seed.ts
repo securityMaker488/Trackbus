@@ -78,6 +78,7 @@ export async function seedDemo(
       geometry,
       routed: false,
       active: true,
+      published: true,
       version: 1,
     };
   });
@@ -95,6 +96,7 @@ export async function seedDemo(
         name: "Colégio Horizonte",
         ownerId,
         demo: true,
+        roomOpen:true,
         createdAt: now,
       }),
     db
@@ -201,6 +203,7 @@ export async function seedDemo(
               : i === 1
                 ? ("paused" as const)
                 : ("scheduled" as const),
+          trackingMode: i < 2 ? ("simulation" as const) : ("gps" as const),
           snapshot: snapshots[i],
         })),
       ),

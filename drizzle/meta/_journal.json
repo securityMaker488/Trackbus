@@ -15,6 +15,20 @@
       "when": 1793704077690,
       "tag": "0001_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793759900225,
+      "tag": "0002_smart_journey",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793760586545,
+      "tag": "0003_notice_delivery",
+      "breakpoints": true
     }
   ]
 }

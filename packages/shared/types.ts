@@ -10,8 +10,9 @@ export type State = {
     role: Role;
     name: string;
     demo: boolean;
+    visitor?:boolean;
   };
-  organization: { id: string; name: string; demo: boolean; maxWait: number };
+  organization: { id: string; name: string; demo: boolean; maxWait: number; roomOpen:boolean; safetyMargin:number };
   vehicles: (typeof S.vehicles.$inferSelect)[];
   drivers: (typeof S.drivers.$inferSelect)[];
   routes: Route[];

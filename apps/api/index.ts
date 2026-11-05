@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
-import { and, eq, desc, lt, sql } from "drizzle-orm";
+import { and, eq, desc, lt, gt, sql } from "drizzle-orm";
 import { z } from "zod";
 import * as s from "../../db/schema";
 import * as v from "../../packages/validation";
@@ -20,6 +20,11 @@ import {
 } from "../../packages/domain";
 import { seedDemo } from "./seed";
 import { calculateRoute } from "./routing";
+import {calculateLocalRoute} from "../../packages/geodata";
+import {deliver,expireWaits,validEndpoint} from "./notifications";
+import {preparePresentation} from "./presentation";
+import {digest as sha,opaque,limit,session} from "./access";
+import {schoolRoutes,journeyState,saveSelection,walkToSelection} from "./journey";
 
 type Actor = {
   orgId: string;
@@ -28,8 +33,9 @@ type Actor = {
   role: Role;
   name: string;
   demo: boolean;
+  visitor?:boolean;
 };
-export type Bindings = { DB: D1Database; VALHALLA_URL?: string };
+export type Bindings = { DB: D1Database; VALHALLA_URL?: string;VAPID_PUBLIC_KEY?:string;VAPID_PRIVATE_JWK?:string;VAPID_SUBJECT?:string };
 type Env = {
   Bindings: Bindings;
   Variables: {
@@ -49,14 +55,6 @@ function fail(
   throw new HTTPException(status, { message });
 }
 const uuid = () => crypto.randomUUID();
-const sha = async (text: string) =>
-  Array.from(
-    new Uint8Array(
-      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)),
-    ),
-  )
-    .map((x) => x.toString(16).padStart(2, "0"))
-    .join("");
 const roles = (c: C, ...allowed: Role[]) => {
   if (!allowed.includes(c.get("actor").role))
     fail(403, "Seu perfil não permite esta ação");
@@ -159,6 +157,10 @@ async function allowedTrips(c: C) {
       .orderBy(desc(s.trips.plannedStart))
       .limit(500);
   if (a.role === "admin") return all;
+  if(a.role==="student"){
+    const visible=new Set((await schoolRoutes(db,a.orgId)).map(r=>r.id));
+    return all.filter(t=>visible.has(t.routeId));
+  }
   if (a.role === "monitor") return all.filter((t) => t.monitorId === a.userId);
   if (a.role === "driver") {
     const drivers = await db
@@ -237,7 +239,8 @@ app.use("*", async (c, next) => {
   c.header("X-Content-Type-Options", "nosniff");
   c.header("Referrer-Policy", "same-origin");
   if (c.req.method !== "GET" && c.req.method !== "HEAD") {
-    if (c.req.header("Origin") !== new URL(c.req.url).origin)
+    const nativeRequest=!c.req.header("Origin")&&(c.req.path==="/api/driver/exchange"||c.req.header("Authorization")?.startsWith("Bearer "));
+    if (!nativeRequest && c.req.header("Origin") !== new URL(c.req.url).origin)
       fail(403, "Origem não autorizada");
     if (!c.req.header("Content-Type")?.startsWith("application/json"))
       fail(400, "Content-Type deve ser application/json");
@@ -247,11 +250,48 @@ app.use("*", async (c, next) => {
   await next();
 });
 app.get("/health", (c) => c.json({ service: "TrackBus", status: "ok" }));
+app.get("/journey/schools",async c=>c.json(await c.get("db").select({id:s.organizations.id,name:s.organizations.name}).from(s.organizations).where(and(eq(s.organizations.demo,true),eq(s.organizations.roomOpen,true))).limit(100)));
+app.post("/journey/join",async c=>{
+  const db=c.get("db"),p=await payload(c,z.object({schoolId:z.string().max(100),name:z.string().trim().min(2).max(48)}).strict());
+  await limit(db,"join:"+await sha(c.req.header("CF-Connecting-IP")||"local"),20);
+  const [org]=await db.select().from(s.organizations).where(and(eq(s.organizations.id,p.schoolId),eq(s.organizations.demo,true),eq(s.organizations.roomOpen,true)));
+  if(!org)fail(404,"Escola de demonstração indisponível");
+  const token=opaque(),prior=getCookie(c,"tb_visitor");
+  if(prior)await db.delete(s.accessSessions).where(and(eq(s.accessSessions.id,await sha(prior)),eq(s.accessSessions.kind,"visitor")));
+  await db.insert(s.accessSessions).values({id:await sha(token),orgId:org.id,kind:"visitor",subject:"visitor:"+uuid(),name:p.name,expires:Date.now()+4*3600000});
+  setCookie(c,"tb_visitor",token,{httpOnly:true,secure:new URL(c.req.url).protocol==="https:",sameSite:"Strict",path:"/",maxAge:4*3600});
+  return c.json({ok:true},201);
+});
+app.post("/journey/leave",async c=>{
+ const token=getCookie(c,"tb_visitor"),db=c.get("db");
+ if(token){const [visitor]=await db.delete(s.accessSessions).where(and(eq(s.accessSessions.id,await sha(token)),eq(s.accessSessions.kind,"visitor"))).returning();
+ if(visitor)await db.delete(s.journeyPreferences).where(and(eq(s.journeyPreferences.orgId,visitor.orgId),eq(s.journeyPreferences.subject,visitor.subject)));}
+ deleteCookie(c,"tb_visitor",{path:"/"});return c.json({ok:true});
+});
+app.post("/driver/exchange",async c=>{
+ const db=c.get("db"),{code}=await payload(c,z.object({code:z.string().regex(/^[A-F0-9]{16}$/)}).strict());
+ await limit(db,"pair:"+await sha(c.req.header("CF-Connecting-IP")||"local"),10);
+ const [pair]=await db.delete(s.accessSessions).where(and(eq(s.accessSessions.id,await sha(code)),eq(s.accessSessions.kind,"pair"),gt(s.accessSessions.expires,Date.now()))).returning();
+ if(!pair)fail(401,"Código expirado, já utilizado ou inválido");
+ const token=opaque();await db.insert(s.accessSessions).values({...pair,id:await sha(token),kind:"device",expires:Date.now()+8*3600000});
+ return c.json({token,expiresIn:28800});
+});
 app.use("*", async (c, next) => {
+  const db=c.get("db"),bearer=c.req.header("Authorization"),visitor=getCookie(c,"tb_visitor");
+  if(bearer||visitor){
+    const kind=bearer?"device":"visitor",credential=bearer?.replace(/^Bearer /,"")||visitor||"";
+    const a=await session(db,credential,kind);
+    if(!a)fail(401,"Sessão expirada. Entre novamente.");
+    const path=c.req.path,permitted=kind==="visitor"?(path==="/api/me"||["/api/journey/state","/api/journey/select","/api/journey/walk"].includes(path)):
+      /^\/api\/(driver\/(trips|incidents|revoke)|trips\/[^/]+\/(status|location|wait)|notices|incidents\/[^/]+\/resolve)$/.test(path);
+    if(!permitted && !(kind==="visitor"&&path==="/api/journey/push"))fail(403,"Ação fora dos limites desta sessão");
+    c.set("identity",a.userId);c.set("actor",a);
+    if(c.req.method!=="GET")await limit(db,kind+":"+a.userId,60);
+    await next();return;
+  }
   const identity = c.req.header("oai-authenticated-user-id");
   if (!identity) fail(401, "Entre com sua conta para continuar");
   c.set("identity", identity);
-  const db = c.get("db");
   const [m] = await db
     .select()
     .from(s.memberships)
@@ -326,6 +366,38 @@ app.get("/me", async (c) => {
     a ? { actor: a } : { needsSetup: true, identity: c.get("identity") },
   );
 });
+app.get("/journey/state",async c=>{roles(c,"student");const actor=c.get("actor");await expireWaits(c.env.DB,actor.orgId);return c.json({...await journeyState(c.get("db"),actor),pushKey:c.env.VAPID_PRIVATE_JWK&&c.env.VAPID_SUBJECT?c.env.VAPID_PUBLIC_KEY:null});});
+app.post("/journey/push",async c=>{
+ roles(c,"student");const a=c.get("actor"),db=c.get("db"),p=await payload(c,z.object({endpoint:z.string().max(2048),enabled:z.boolean()}).strict());
+ if(!validEndpoint(p.endpoint))fail(422,"Serviço push não reconhecido");const id=await sha(p.endpoint);
+ if(!p.enabled){await db.delete(s.pushSubscriptions).where(and(eq(s.pushSubscriptions.id,id),eq(s.pushSubscriptions.subject,a.userId),eq(s.pushSubscriptions.orgId,a.orgId)));return c.json({ok:true});}
+ if(!c.env.VAPID_PRIVATE_JWK||!c.env.VAPID_SUBJECT||!c.env.VAPID_PUBLIC_KEY)fail(503,"Web Push não configurado");
+ await db.insert(s.pushSubscriptions).values({id,orgId:a.orgId,subject:a.userId,endpoint:p.endpoint,expires:Date.now()+(a.visitor?4*3600000:30*86400000)}).onConflictDoUpdate({target:s.pushSubscriptions.id,set:{subject:a.userId,orgId:a.orgId,expires:Date.now()+(a.visitor?4*3600000:30*86400000)}});
+ return c.json({ok:true});
+});
+app.post("/journey/select",async c=>{roles(c,"student");const choice=await payload(c,z.object({routeId:z.string(),stopId:z.string(),favorite:z.boolean(),notify:z.boolean()}).strict());await saveSelection(c.get("db"),c.get("actor"),choice);return c.json({ok:true});});
+app.post("/journey/walk",async c=>{roles(c,"student");const pos=await payload(c,z.object({lat:z.number().min(-90).max(90),lng:z.number().min(-180).max(180)}).strict());return c.json(await walkToSelection(c.get("db"),c.get("actor"),pos,c.env.VALHALLA_URL));});
+app.post("/journey/room",async c=>{
+ roles(c,"admin");const a=c.get("actor"),db=c.get("db");
+ if(!a.demo)fail(403,"Entrada por apelido exclusiva da demonstração");
+ const p=await payload(c,z.object({roomOpen:z.boolean(),safetyMargin:z.number().int().min(1).max(15)}).strict());
+ await db.update(s.organizations).set(p).where(eq(s.organizations.id,a.orgId));
+ if(!p.roomOpen)await db.delete(s.accessSessions).where(and(eq(s.accessSessions.orgId,a.orgId),eq(s.accessSessions.kind,"visitor")));
+ await log(c,"journey_room_changed",a.orgId);return c.json({ok:true});
+});
+app.post("/journey/prepare",async c=>{roles(c,"admin");const a=c.get("actor");if(!a.demo)fail(403,"Circuito exclusivo da demonstração");await preparePresentation(c.get("db"),a.orgId);await log(c,"presentation_prepared",a.orgId);return c.json({ok:true});});
+app.post("/routes/:id/visibility",async c=>{roles(c,"admin");const r=await routeRef(c,c.req.param("id")),p=await payload(c,z.object({published:z.boolean()}).strict());await c.get("db").update(s.routes).set(p).where(eq(s.routes.id,r.id));await log(c,"route_visibility",r.id);return c.json({ok:true});});
+app.post("/driver/pair",async c=>{
+ roles(c,"admin","driver");const a=c.get("actor"),db=c.get("db"),p=await payload(c,z.object({driverId:z.string()}).strict());
+ const [driver]=await db.select().from(s.drivers).where(and(eq(s.drivers.id,p.driverId),eq(s.drivers.orgId,a.orgId),eq(s.drivers.status,"active")));
+ if(!driver?.userId||a.role==="driver"&&driver.userId!==a.userId)fail(403,"Motorista sem conta autorizada");
+ const code=opaque().slice(0,16).toUpperCase(),expires=Date.now()+120000;
+ await db.batch([db.delete(s.accessSessions).where(and(eq(s.accessSessions.orgId,a.orgId),eq(s.accessSessions.subject,driver.userId),eq(s.accessSessions.kind,"pair"))),db.insert(s.accessSessions).values({id:await sha(code),kind:"pair",orgId:a.orgId,subject:driver.userId,name:driver.name,expires})]);
+ await log(c,"driver_pair_issued",driver.id);return c.json({code,expires});
+});
+app.get("/driver/trips",async c=>{roles(c,"driver");return c.json((await allowedTrips(c)).filter(t=>!["completed","cancelled"].includes(t.status)&&t.trackingMode!=="simulation").map(t=>({id:t.id,name:t.name,status:t.status,stops:t.snapshot.stops,trackingMode:t.trackingMode})));});
+app.post("/driver/revoke",async c=>{roles(c,"driver");const token=c.req.header("Authorization")?.replace(/^Bearer /,"");if(token)await c.get("db").delete(s.accessSessions).where(and(eq(s.accessSessions.id,await sha(token)),eq(s.accessSessions.kind,"device")));return c.json({ok:true});});
+app.get("/driver/incidents",async c=>{roles(c,"driver");const ids=new Set((await allowedTrips(c)).map(t=>t.id));const list=await c.get("db").select({id:s.incidents.id,tripId:s.incidents.tripId,description:s.incidents.description}).from(s.incidents).where(and(eq(s.incidents.orgId,c.get("actor").orgId),eq(s.incidents.status,"open"))).limit(200);return c.json(list.filter(i=>ids.has(i.tripId)));});
 app.post("/bootstrap", async (c) => {
   if (c.get("actor")) fail(409, "Instituição já configurada");
   const name =
@@ -399,6 +471,7 @@ app.post("/logout", async (c) => {
   return c.json({ ok: true });
 });
 app.get("/state", async (c) => {
+  await expireWaits(c.env.DB,c.get("actor").orgId);
   const db = c.get("db"),
     a = c.get("actor"),
     orgId = a.orgId,
@@ -527,6 +600,7 @@ app.get("/state", async (c) => {
       name: org[0].name,
       demo: org[0].demo,
       maxWait: org[0].maxWait,
+      roomOpen: org[0].roomOpen,safetyMargin:org[0].safetyMargin,
     },
     vehicles: admin
       ? vs
@@ -536,7 +610,7 @@ app.get("/state", async (c) => {
       : ds
           .filter((d) => ts.some((t) => t.driverId === d.id))
           .map((d) => ({ ...d, contact: "", userId: null })),
-    routes: admin ? rs : rs.filter((r) => routeIds.has(r.id)),
+    routes: admin ? rs : a.role==="student"?rs.filter(r=>r.published&&r.active):rs.filter((r) => routeIds.has(r.id)),
     students: visibleStudents,
     trips: ts,
     locations: visibleLocations,
@@ -560,7 +634,7 @@ app.get("/state", async (c) => {
     memberships: members,
     estimates,
     serverTime: Date.now(),
-    routingConfigured: Boolean(c.env.VALHALLA_URL),
+    routingConfigured: true,
   });
 });
 
@@ -755,6 +829,7 @@ app.post("/trips", async (c) => {
     a = c.get("actor");
   if (!r.active || vehicle.status !== "available")
     fail(409, "Rota ou veículo indisponível");
+  if(data.trackingMode==="simulation"&&!a.demo)fail(403,"Simulador exclusivo da demonstração");
   const [driver] = await db
     .select()
     .from(s.drivers)
@@ -829,6 +904,7 @@ app.post("/trips/:id/status", async (c) => {
   if (status === "cancelled" && c.get("actor").role !== "admin")
     fail(403, "Cancelamento requer administrador");
   if (status === "in_progress") {
+    if((await c.get("db").select({id:s.incidents.id}).from(s.incidents).where(and(eq(s.incidents.tripId,t.id),eq(s.incidents.status,"open"))).limit(1)).length)fail(409,"Resolva a ocorrência antes de retomar");
     const vehicle = await vehicleRef(c, t.vehicleId);
     if (vehicle.status !== "available") fail(409, "Veículo indisponível");
   }
@@ -849,6 +925,7 @@ app.post("/trips/:id/status", async (c) => {
     c.get("actor").demo,
   );
   await log(c, "trip_state_changed", t.id);
+  await publishNotice(c,t,status,`Viagem ${t.name}: ${({scheduled:"programada",in_progress:"em andamento",paused:"pausada",interrupted:"interrompida",completed:"encerrada",cancelled:"cancelada"})[status]}.`);
   return c.json({ ok: true });
 });
 async function storePosition(c: C, t: Trip, p: Position, validate = true) {
@@ -858,10 +935,16 @@ async function storePosition(c: C, t: Trip, p: Position, validate = true) {
       .from(s.locations)
       .where(eq(s.locations.tripId, t.id));
   if (validate) {
+    if(t.trackingMode==="simulation"||old?.position.source==="simulation")fail(409,"Esta viagem usa posição simulada");
     const error = validatePosition(p, old?.position || null, Date.now());
     if (error) fail(422, error);
+    if(p.speed===null&&old?.position.source==="gps"){
+      const elapsed=(p.timestamp-old.position.timestamp)/1000;
+      const meters=distance(p,old.position);
+      if(elapsed>=4&&elapsed<=45&&p.accuracy<=30&&old.position.accuracy<=30&&meters>p.accuracy+old.position.accuracy)p={...p,speed:Math.min(45,meters/elapsed)};
+    }
   }
-  await db
+  const changed=await db
     .insert(s.locations)
     .values({
       id: uuid(),
@@ -874,7 +957,8 @@ async function storePosition(c: C, t: Trip, p: Position, validate = true) {
       target: s.locations.tripId,
       set: { position: p, updatedAt: Date.now() },
       setWhere: sql`json_extract(${s.locations.position}, '$.timestamp') < ${p.timestamp}`,
-    });
+    }).returning({id:s.locations.id});
+  if(!changed.length)fail(409,"Outra posição mais recente já foi recebida");
   return p;
 }
 app.post("/trips/:id/location", async (c) => {
@@ -899,6 +983,7 @@ app.post("/trips/:id/simulate", async (c) => {
     );
   if (t.status !== "in_progress")
     fail(409, "Inicie ou retome a viagem antes de simular");
+  if(t.trackingMode==="gps")fail(409,"Viagem reservada para GPS real");
   const [previous] = await c
     .get("db")
     .select()
@@ -971,6 +1056,7 @@ app.post("/trips/:id/wait", async (c) => {
     if (
       !loc ||
       now - loc.position.timestamp > 60000 ||
+      (loc.position.source==="gps"&&(loc.position.speed??0)>1.5) ||
       distance(stop, loc.position) > 150
     )
       fail(409, "Confirme uma posição recente próxima à parada");
@@ -986,11 +1072,17 @@ app.post("/trips/:id/wait", async (c) => {
       c.get("actor").demo,
     );
   } else {
+    if(!t.waitUntil)fail(409,"Não há espera em andamento");
     await revise(c, t, { waitUntil: null, waitStopId: null });
     await event(c, t.id, "wait_ended", "Espera encerrada", c.get("actor").demo);
   }
+  await publishNotice(c,t,p.seconds?"waiting":"wait_ended",p.seconds?`Ônibus na parada. Espera autorizada até ${new Date(now+p.seconds*1000).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",timeZone:"America/Bahia"})}.`:"Espera encerrada na parada.");
   return c.json({ ok: true });
 });
+async function publishNotice(c:C,t:Trip,category:string,message:string){
+ const id=uuid();await c.get("db").insert(s.notices).values({id,orgId:t.orgId,tripId:t.id,category,message,actorId:c.get("actor").userId,simulated:t.trackingMode==="simulation",createdAt:Date.now()});
+ await deliver(c.get("db"),c.env,t,id);
+}
 app.post("/notices", async (c) => {
   roles(c, "admin", "driver");
   const p = await payload(c, v.noticeSchema),
@@ -1000,6 +1092,12 @@ app.post("/notices", async (c) => {
   if (["completed", "cancelled"].includes(t.status))
     fail(409, "Viagem encerrada");
   if (p.simulated && !a.demo) fail(422, "Evento simulado fora da demonstração");
+  if(a.role==="driver"&&!p.safeStop)fail(422,"Confirme que o veículo está parado em segurança");
+  if(a.role==="driver"){
+    const [loc]=await db.select().from(s.locations).where(eq(s.locations.tripId,t.id));
+    if(loc&&loc.position.source==="gps"&&Date.now()-loc.position.timestamp<30000&&(loc.position.speed||0)>1.5)fail(409,"O GPS ainda indica movimento. Aguarde a parada.");
+  }
+  if(p.category==="resumed"&&(await db.select({id:s.incidents.id}).from(s.incidents).where(and(eq(s.incidents.tripId,t.id),eq(s.incidents.status,"open"))).limit(1)).length)fail(409,"Encerre a ocorrência para comunicar a retomada");
   const now = Date.now(),
     id = uuid();
   const interruption = ["mechanical", "interruption", "assistance"].includes(
@@ -1028,7 +1126,7 @@ app.post("/notices", async (c) => {
       category: p.category,
       message: p.message,
       actorId: a.userId,
-      simulated: p.simulated || a.demo,
+      simulated: p.simulated || t.trackingMode === "simulation",
       createdAt: now,
     });
   if (interruption)
@@ -1043,10 +1141,11 @@ app.post("/notices", async (c) => {
         status: "open",
         actorId: a.userId,
         createdAt: now,
-        simulated: p.simulated || a.demo,
+        simulated: p.simulated || t.trackingMode === "simulation",
       });
-  await event(c, t.id, p.category, p.message, p.simulated || a.demo);
+  await event(c, t.id, p.category, p.message, p.simulated || t.trackingMode === "simulation");
   await log(c, "notice_created", id);
+  await deliver(db,c.env,t,id);
   return c.json({ id }, 201);
 });
 app.post("/notices/:id/read", async (c) => {
@@ -1104,10 +1203,11 @@ app.post("/incidents/:id/resolve", async (c) => {
     .where(and(eq(s.incidents.tripId, t.id), eq(s.incidents.status, "open")));
   if (!remaining.length && t.status === "interrupted")
     await revise(c, t, { status: "in_progress", delayUntil: null });
+  const resolutionNoticeId=uuid();
   await db
     .insert(s.notices)
     .values({
-      id: uuid(),
+      id: resolutionNoticeId,
       orgId: t.orgId,
       tripId: t.id,
       category: "resumed",
@@ -1120,6 +1220,7 @@ app.post("/incidents/:id/resolve", async (c) => {
     });
   await event(c, t.id, "incident_resolved", resolution, i.simulated);
   await log(c, "incident_resolved", i.id);
+  await deliver(db,c.env,t,resolutionNoticeId);
   return c.json({ ok: true });
 });
 app.post("/boarding", async (c) => {
@@ -1416,19 +1517,37 @@ app.post("/settings", async (c) => {
 });
 app.post("/retention", async (c) => {
   roles(c, "admin");
-  const db = c.get("db");
+  const db = c.get("db"),
+    orgId = c.get("actor").orgId,
+    now = Date.now();
   await db.batch([
     db
       .delete(s.demoSessions)
       .where(
         and(
-          eq(s.demoSessions.orgId, c.get("actor").orgId),
-          lt(s.demoSessions.expires, Date.now()),
+          eq(s.demoSessions.orgId, orgId),
+          lt(s.demoSessions.expires, now),
         ),
       ),
-    db.delete(s.rateLimits).where(lt(s.rateLimits.expires, Date.now())),
+    db
+      .delete(s.accessSessions)
+      .where(
+        and(
+          eq(s.accessSessions.orgId, orgId),
+          lt(s.accessSessions.expires, now),
+        ),
+      ),
+    db
+      .delete(s.pushSubscriptions)
+      .where(
+        and(
+          eq(s.pushSubscriptions.orgId, orgId),
+          lt(s.pushSubscriptions.expires, now),
+        ),
+      ),
+    db.delete(s.rateLimits).where(lt(s.rateLimits.expires, now)),
   ]);
-  await log(c, "retention_executed", c.get("actor").orgId);
+  await log(c, "retention_executed", orgId);
   return c.json({ ok: true });
 });
 app.post("/walking", async (c) => {
@@ -1449,27 +1568,29 @@ app.post("/walking", async (c) => {
     st = own.find((x) => x.id === p.studentId && x.routeId === t.routeId),
     stop = t.snapshot.stops.find((x) => x.id === st?.stopId);
   if (!stop) fail(404, "Parada não encontrada");
-  if (!c.env.VALHALLA_URL)
+  const local=calculateLocalRoute([{lat:p.lat,lng:p.lng},stop],"pedestrian");
+  if (!local&&!c.env.VALHALLA_URL)
     return c.json({
       available: false,
       reason:
-        "Serviço de trajetos a pé ainda não configurado. Sua posição não foi armazenada.",
+        "Fora da cobertura caminhável. Sua posição não foi armazenada.",
     });
   let route;
   try {
-    route = await calculateRoute(
-      c.env.VALHALLA_URL,
+    route = local??await calculateRoute(
+      c.env.VALHALLA_URL!,
       [{ lat: p.lat, lng: p.lng }, stop],
       "pedestrian",
     );
   } catch {
     fail(503, "Caminhada indisponível no momento");
   }
-  const [loc] = await c
-      .get("db")
-      .select()
-      .from(s.locations)
-      .where(eq(s.locations.tripId, t.id)),
+  const db = c.get("db"),
+    [[loc], [org]] = await Promise.all([
+      db.select().from(s.locations).where(eq(s.locations.tripId, t.id)),
+      db.select().from(s.organizations).where(eq(s.organizations.id, t.orgId)),
+    ]),
+    margin = org?.safetyMargin ?? 3,
     eta = estimateArrival({
       position: loc?.position || null,
       itinerary: t.snapshot,
@@ -1484,18 +1605,19 @@ app.post("/walking", async (c) => {
     seconds: route.seconds,
     meters: route.meters,
     geometry: route.geometry,
-    recommendation: departure(eta.minMinutes, route.seconds, 3),
-    margin: 3,
+    source: "source" in route ? route.source : "institutional",
+    recommendation: departure(eta.minMinutes, route.seconds, margin),
+    margin,
   });
 });
 app.post("/routes/:id/calculate", async (c) => {
   roles(c, "admin");
   const r = await routeRef(c, c.req.param("id"));
-  if (!c.env.VALHALLA_URL)
-    fail(503, "Provedor de roteamento ainda não configurado");
+  const local=calculateLocalRoute(r.stops,"bus");
+  if (!local&&!c.env.VALHALLA_URL)fail(422,"Paradas fora da cobertura ou sem via de ônibus conectada");
   let route;
   try {
-    route = await calculateRoute(c.env.VALHALLA_URL, r.stops, "bus");
+    route = local??await calculateRoute(c.env.VALHALLA_URL!, r.stops, "bus");
   } catch {
     fail(503, "Não foi possível calcular o trajeto sobre vias");
   }
@@ -1579,6 +1701,7 @@ app.onError((err, c) => {
       },
       409,
     );
+  if (message.includes("telemetry_scope"))return c.json({error:"Fonte de posição ou estado da viagem incompatível."},409);
   if (err instanceof z.ZodError)
     return c.json({ error: "Dados inválidos" }, 422);
   console.error(

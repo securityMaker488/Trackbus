@@ -69,6 +69,7 @@ export const tripSchema = z
     monitorId: z.string().max(100).nullable().default(null),
     plannedStart: z.number().int().positive(),
     plannedEnd: z.number().int().positive(),
+    trackingMode:z.enum(["gps","simulation"]).default("gps"),
   })
   .strict()
   .refine(
@@ -99,9 +100,11 @@ export const noticeSchema = z
       "resumed",
       "information",
       "assistance",
+      "early",
     ]),
     message: z.string().trim().min(3).max(500),
     delayMinutes: z.number().int().min(0).max(120).default(0),
     simulated: z.boolean().default(false),
+    safeStop:z.boolean().optional(),
   })
   .strict();
