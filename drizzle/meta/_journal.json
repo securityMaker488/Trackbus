@@ -29,6 +29,20 @@
       "when": 1793760586545,
       "tag": "0003_notice_delivery",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794258216026,
+      "tag": "0004_v6_route_schedule",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794316902401,
+      "tag": "0005_gps_route_progress",
+      "breakpoints": true
     }
   ]
 }

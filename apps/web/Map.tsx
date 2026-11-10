@@ -25,6 +25,11 @@ import {
   Minus,
 } from "lucide-react";
 import type { Itinerary, Position, Point } from "../../packages/domain";
+import { MapSearch } from "./MapSearch";
+import {
+  splitItinerary,
+  type TrackingProgress,
+} from "../../packages/domain/tracking";
 
 const palette = {
   black: "#090909",
@@ -96,11 +101,17 @@ export function BusIcon({ size = 24 }: { size?: number }) {
   );
 }
 
-type VehiclePoint = { id: string; label: string; position: Position };
+type VehiclePoint = {
+  id: string;
+  label: string;
+  position: Position;
+  progress?: TrackingProgress | null;
+};
 type Props = {
-  routes: Itinerary[];
+  routes: (Itinerary & { tripId?: string })[];
   positions?: VehiclePoint[];
   onPick?: (p: Point) => void;
+  onMoveStop?: (id: string, p: Point) => void;
   walking?: [number, number][];
   studentPosition?: Point | null;
   onTripDetails?: (tripId: string) => void;
@@ -159,26 +170,43 @@ function MapMarker({
   map,
   point,
   animate = false,
+  onDrag,
   children,
 }: {
   map: GLMap;
   point: Point;
   animate?: boolean;
+  onDrag?: (p: Point) => void;
   children: ReactNode;
 }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const marker = useRef<Marker | null>(null);
   const current = useRef(point);
   current.current = point;
+  const drag = useRef(onDrag);
+  drag.current = onDrag;
   useEffect(() => {
     let disposed = false;
     import("maplibre-gl").then(({ Marker: GLMarker }) => {
       if (disposed) return;
       const element = document.createElement("div");
       const p = current.current;
-      marker.current = new GLMarker({ element, anchor: "center" })
+      element.addEventListener("click", (e) => e.stopPropagation());
+      marker.current = new GLMarker({
+        element,
+        anchor: "center",
+        draggable: !!drag.current,
+      })
         .setLngLat([p.lng, p.lat])
         .addTo(map);
+      marker.current.on("dragend", () => {
+        const fix = marker.current?.getLngLat();
+        if (fix)
+          drag.current?.({
+            lat: Number(fix.lat.toFixed(6)),
+            lng: Number(fix.lng.toFixed(6)),
+          });
+      });
       setHost(element);
     });
     return () => {
@@ -241,7 +269,9 @@ function BusMarker({
     " · " +
     (p.source === "simulation" ? "Simulação" : "GPS do motorista") +
     " · " +
-    positionMessage(p, now) +
+    (vehicle.progress?.waiting && !old
+      ? "Aguardando no ponto"
+      : positionMessage(p, now)) +
     " · " +
     formatTime(p.timestamp);
   return (
@@ -275,6 +305,7 @@ export default function MapView({
   onPick,
   walking = [],
   studentPosition = null,
+  onMoveStop,
   onTripDetails,
   onNotices,
   large = false,
@@ -291,8 +322,12 @@ export default function MapView({
     [selected, setSelected] = useState("");
   const [now, setNow] = useState(() => Date.now());
   pick.current = onPick;
+  const fitted = useRef(false);
   const current = positions.find((v) => v.id === selected) || positions[0];
   const routeKey = JSON.stringify(routes),
+    progressKey = JSON.stringify(
+      positions.map((v) => [v.id, v.progress?.alongMeters]),
+    ),
     walkKey = JSON.stringify(walking);
   useEffect(() => {
     let disposed = false,
@@ -303,7 +338,7 @@ export default function MapView({
         gl.setWorkerUrl("/map-worker-v6.mjs");
         instance = new gl.Map({
           container: box.current,
-          center: [-38.488, -12.983],
+          center: [-35.8855, -7.2185],
           zoom: 13.4,
           style,
           attributionControl: { compact: false },
@@ -343,13 +378,28 @@ export default function MapView({
       type: "FeatureCollection",
       features: routes
         .filter((r) => r.geometry.length >= 2)
-        .map((r, i) => ({
-          type: "Feature",
-          properties: {
-            color: [palette.yellow, palette.secondary, palette.light][i % 3],
-          },
-          geometry: { type: "LineString", coordinates: r.geometry },
-        })),
+        .flatMap((r, i) => {
+          const progress = positions.find((v) => v.id === r.tripId)?.progress;
+          const parts = progress
+            ? splitItinerary(r.geometry, progress.alongMeters)
+            : { remaining: r.geometry, completed: [] };
+          return (["remaining", "completed"] as const)
+            .filter((part) => parts[part].length >= 2)
+            .map((part) => ({
+              type: "Feature" as const,
+              properties: {
+                part,
+                color:
+                  part === "completed"
+                    ? palette.deep
+                    : [palette.yellow, palette.secondary, palette.light][i % 3],
+              },
+              geometry: {
+                type: "LineString" as const,
+                coordinates: parts[part],
+              },
+            }));
+        }),
     };
     const existing = map.getSource("routes") as GeoJSONSource | undefined;
     if (existing) existing.setData(data);
@@ -359,6 +409,7 @@ export default function MapView({
         id: "route-glow",
         source: "routes",
         type: "line",
+        filter: ["==", ["get", "part"], "remaining"],
         paint: {
           "line-color": ["get", "color"],
           "line-width": 11,
@@ -369,11 +420,28 @@ export default function MapView({
         id: "route-lines",
         source: "routes",
         type: "line",
+        filter: ["==", ["get", "part"], "remaining"],
         layout: { "line-join": "round", "line-cap": "round" },
         paint: { "line-color": ["get", "color"], "line-width": 4 },
       });
+      map.addLayer({
+        id: "route-completed",
+        source: "routes",
+        type: "line",
+        filter: ["==", ["get", "part"], "completed"],
+        paint: {
+          "line-color": palette.deep,
+          "line-width": 2,
+          "line-dasharray": [2, 3],
+          "line-opacity": 0.65,
+        },
+      });
     }
-    fitItineraries(map, routes, walking);
+  }, [map, routeKey, progressKey]);
+  useEffect(() => {
+    if (!map) return;
+    if (!pick.current || !fitted.current) fitItineraries(map, routes, walking);
+    fitted.current = true;
   }, [map, routeKey]);
   useEffect(() => {
     if (!map) return;
@@ -408,7 +476,7 @@ export default function MapView({
     }
   }, [map, walkKey]);
   useEffect(() => {
-    for (const id of ["route-lines", "route-glow"]) {
+    for (const id of ["route-lines", "route-glow", "route-completed"]) {
       if (map?.getLayer(id))
         map.setLayoutProperty(id, "visibility", showRoute ? "visible" : "none");
     }
@@ -443,7 +511,12 @@ export default function MapView({
         <>
           {showStops &&
             [...uniqueStops.values()].map(({ stop, number }) => (
-              <MapMarker key={stop.id} map={map} point={stop}>
+              <MapMarker
+                key={stop.id}
+                map={map}
+                point={stop}
+                onDrag={onMoveStop ? (p) => onMoveStop(stop.id, p) : undefined}
+              >
                 <span
                   className="stop-marker"
                   title={stop.name}
@@ -493,7 +566,10 @@ export default function MapView({
                 ? "SIMULAÇÃO — POSIÇÃO FICTÍCIA"
                 : "GPS do motorista") +
               " · " +
-              positionMessage(current.position, now)
+              (current.progress?.waiting &&
+              now - current.position.timestamp <= 60000
+                ? "Aguardando no ponto"
+                : positionMessage(current.position, now))
             : routes.some((r) => !r.routed)
               ? "Traçado esquemático"
               : "Itinerário escolar"}
@@ -503,7 +579,21 @@ export default function MapView({
             Última posição às {formatTime(current.position.timestamp)}
           </small>
         )}
+        {current?.progress && (
+          <small className="route-progress" role="status">
+            {Math.round(
+              Math.max(
+                0,
+                current.progress.totalMeters - current.progress.alongMeters,
+              ),
+            )}{" "}
+            m de trajeto restante
+            {current.progress.offRoute ? " · Fora do itinerário" : ""}
+            {!current.progress.reliable ? " · Progresso sem confirmação" : ""}
+          </small>
+        )}
       </div>
+      {map && <MapSearch onCenter={center} />}
       {!map && (
         <div className="map-loading">
           <MapPin size={25} />

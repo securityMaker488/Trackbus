@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { calculateLocalRoute, localCoverage } from "../../packages/geodata";
+import demo from "../../packages/geodata/campina-demo.json";
 
 const circuito = [
   { lat: -12.9978788, lng: -38.5130599 },
@@ -29,16 +30,56 @@ describe("malha viária local de Salvador (geodata)", () => {
     const a = { lat: -12.9891041, lng: -38.5081797 };
     const b = { lat: -12.9886991, lng: -38.5077412 };
     expect(calculateLocalRoute([a, b], "bus")?.meters).toBe(67);
-    expect(calculateLocalRoute([b, a], "bus")?.meters ?? 0).toBeGreaterThan(2000);
+    expect(calculateLocalRoute([b, a], "bus")?.meters ?? 0).toBeGreaterThan(
+      2000,
+    );
   });
 
   it("rejeita pontos fora da cobertura, afastados de vias ou inválidos", () => {
-    expect(calculateLocalRoute([circuito[0], { lat: 0, lng: 0 }], "pedestrian")).toBeNull();
-    expect(calculateLocalRoute([circuito[0], { lat: Number.NaN, lng: 0 }], "pedestrian")).toBeNull();
     expect(
-      calculateLocalRoute([circuito[0], { lat: -12.96902, lng: -38.51699 }], "pedestrian"),
+      calculateLocalRoute([circuito[0], { lat: 0, lng: 0 }], "pedestrian"),
+    ).toBeNull();
+    expect(
+      calculateLocalRoute(
+        [circuito[0], { lat: Number.NaN, lng: 0 }],
+        "pedestrian",
+      ),
+    ).toBeNull();
+    expect(
+      calculateLocalRoute(
+        [circuito[0], { lat: -12.96902, lng: -38.51699 }],
+        "pedestrian",
+      ),
     ).toBeNull();
     expect(calculateLocalRoute([circuito[0]], "bus")).toBeNull();
-    expect(calculateLocalRoute([circuito[0], circuito[0]], "pedestrian")?.meters).toBe(0);
+    expect(
+      calculateLocalRoute([circuito[0], circuito[0]], "pedestrian")?.meters,
+    ).toBe(0);
+  });
+});
+
+describe("Campina Grande com motor integrado", () => {
+  it("circuito de ônibus e caminhada percorre 871m de vias OSM", () => {
+    for (const mode of ["bus", "pedestrian"] as const) {
+      const r = calculateLocalRoute(demo.points, mode);
+      expect(r).toMatchObject({
+        source: "osm-local",
+        meters: 871,
+        snapMeters: [0, 0, 0],
+      });
+      expect(r?.geometry).toHaveLength(44);
+    }
+  });
+  it("não calcula linha reta de Campina a João Pessoa como percurso real", () => {
+    expect(
+      calculateLocalRoute(
+        [demo.points[0], { lat: -7.1688, lng: -34.8638 }],
+        "bus",
+      ),
+    ).toBeNull();
+  });
+  it("respeita sentido único no Açude Velho", () => {
+    const back = calculateLocalRoute([...demo.points].reverse(), "bus");
+    expect(back === null || back.meters > 1000).toBe(true);
   });
 });

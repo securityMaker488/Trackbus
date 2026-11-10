@@ -10,13 +10,13 @@ await build({
   minify: true,
   legalComments: "eof",
 });
-const symbol = readFileSync("public/favicon.svg");
+const symbol = readFileSync("public/trackbus-logo.png");
 await Promise.all([
   sharp(symbol).resize(192, 192).png().toFile("public/icon-192.png"),
   sharp(symbol)
     .resize(420, 420)
-    .extend({ top: 46, right: 46, bottom: 46, left: 46, background: "#FACC15" })
-    .flatten({ background: "#FACC15" })
+    .extend({ top: 46, right: 46, bottom: 46, left: 46, background: "#090909" })
+    .flatten({ background: "#090909" })
     .png()
     .toFile("public/icon-512.png"),
 ]);

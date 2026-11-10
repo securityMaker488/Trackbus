@@ -71,6 +71,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import MapView, { BusIcon } from "./Map";
+import { Brand } from "./Brand";
 import type { State, Trip, Route } from "../../packages/shared/types";
 import {
   transitions,
@@ -83,9 +84,9 @@ import {
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } },
 });
-import {api} from "./http";
-import {SmartJourney,JoinJourney} from "./SmartJourney";
-import {DemoControls} from "./DemoControls";
+import { api } from "./http";
+import { SmartJourney, JoinJourney } from "./SmartJourney";
+import { DemoControls } from "./DemoControls";
 const statusLabels: Record<string, string> = {
   scheduled: "Programada",
   in_progress: "Em andamento",
@@ -110,7 +111,10 @@ const statusLabels: Record<string, string> = {
   interruption: "Interrupção",
   resumed: "Retomada",
   information: "Informação",
-  assistance: "Assistência", early:"Chegada antecipada",waiting:"Espera iniciada",wait_ended:"Espera encerrada",
+  assistance: "Assistência",
+  early: "Chegada antecipada",
+  waiting: "Espera iniciada",
+  wait_ended: "Espera encerrada",
 };
 const roleLabels: Record<Role, string> = {
   admin: "Administrador",
@@ -480,7 +484,7 @@ export default function TrackBus() {
         </HashRouter>
       ) : (
         <div className="splash">
-          <BusIcon size={44} />
+          <Brand />
           <strong>TrackBus</strong>
           <span>Conectando sua operação…</span>
         </div>
@@ -511,7 +515,12 @@ function App() {
     queryKey: ["state"],
     queryFn: () => api<State>("/state"),
     enabled: Boolean(me.data?.actor && !me.data.actor.visitor),
-    refetchInterval: 5000,
+    refetchInterval: (q) =>
+      q.state.data?.trips.some((t) =>
+        ["in_progress", "paused", "interrupted"].includes(t.status),
+      )
+        ? 5000
+        : 15000,
     refetchIntervalInBackground: false,
   });
   const refresh = () => {
@@ -542,27 +551,52 @@ function App() {
   if (me.isPending)
     return (
       <div className="splash">
-        <BusIcon size={44} />
+        <Brand />
         <strong>TrackBus</strong>
         <span>Conectando sua operação…</span>
       </div>
     );
-  if (me.data?.actor?.visitor) return <SmartJourney visitor onLeave={()=>window.location.reload()}/>;
-  if(location.pathname==="/participar")return <div className="journey-shell"><header className="journey-header"><div><span className="brand"><BusIcon/> TrackBus</span><h1>Sua viagem começa aqui.</h1><p>Entrada demonstrativa de aluno · FECT e Congretech</p></div></header><JoinJourney onJoin={()=>{qc.clear();window.location.reload();}}/><a href="#/">Voltar à operação</a></div>;
+  if (me.data?.actor?.visitor)
+    return <SmartJourney visitor onLeave={() => window.location.reload()} />;
+  if (location.pathname === "/participar")
+    return (
+      <div className="journey-shell">
+        <header className="journey-header">
+          <div>
+            <span className="brand">
+              <Brand />
+            </span>
+            <h1>Sua viagem começa aqui.</h1>
+            <p>Entrada demonstrativa de aluno · FECT e Congretech</p>
+          </div>
+        </header>
+        <JoinJourney
+          onJoin={() => {
+            qc.clear();
+            window.location.reload();
+          }}
+        />
+        <a href="#/">Voltar à operação</a>
+      </div>
+    );
   if (me.error || me.data?.needsSetup)
     return (
       <div className="welcome">
         <div className="welcome-copy">
           <div className="brand">
-            <span>
-              <BusIcon />
-            </span>
-            trackbus<span className="brand-period">.</span>
+            <Brand />
           </div>
           <span className="eyebrow">MOBILIDADE ESCOLAR INTELIGENTE</span>
           <h1>Sua viagem começa aqui.</h1>
-          <p>Acompanhe seu ônibus, escolha sua parada e descubra quando sair.</p>
-          <JoinJourney onJoin={()=>{qc.clear();window.location.reload();}}/>
+          <p>
+            Acompanhe seu ônibus, escolha sua parada e descubra quando sair.
+          </p>
+          <JoinJourney
+            onJoin={() => {
+              qc.clear();
+              window.location.reload();
+            }}
+          />
           <small>Acesso da equipe de operação</small>
           {me.data?.needsSetup ? (
             <button
@@ -591,7 +625,7 @@ function App() {
         </div>
         <div className="welcome-art">
           <div className="orb">
-            <BusIcon size={130} />
+            <Brand large />
           </div>
           <span className="orbit one" />
           <span className="orbit two" />
@@ -645,7 +679,16 @@ function App() {
       fields: [
         { name: "name", label: "Nome da viagem", value: "Ida · Manhã" },
         { name: "routeId", label: "Rota", options: routeOpts },
-        {name:"trackingMode",label:"Fonte de posição",options:[{value:"gps",label:"GPS real do motorista"},...(d.organization.demo?[{value:"simulation",label:"SIMULAÇÃO — POSIÇÃO FICTÍCIA"}]:[])]},
+        {
+          name: "trackingMode",
+          label: "Fonte de posição",
+          options: [
+            { value: "gps", label: "GPS real do motorista" },
+            ...(d.organization.demo
+              ? [{ value: "simulation", label: "SIMULAÇÃO — POSIÇÃO FICTÍCIA" }]
+              : []),
+          ],
+        },
         { name: "vehicleId", label: "Veículo", options: vehicleOpts },
         {
           name: "driverId",
@@ -692,11 +735,17 @@ function App() {
             "interruption",
             "resumed",
             "information",
-            "assistance", "early",
+            "assistance",
+            "early",
           ].map((k) => ({ value: k, label: statusLabels[k] })),
         },
         {
-          name: "safeStop",label:"Veículo parado em segurança",options:[{value:"false",label:"Ainda não confirmado"},{value:"true",label:"Confirmo que está parado em segurança"}]
+          name: "safeStop",
+          label: "Veículo parado em segurança",
+          options: [
+            { value: "false", label: "Ainda não confirmado" },
+            { value: "true", label: "Confirmo que está parado em segurança" },
+          ],
         },
         {
           name: "delayMinutes",
@@ -716,7 +765,10 @@ function App() {
         },
       ],
       transform: (x) => ({
-        tripId:x.tripId,category:x.category,message:x.message,safeStop:x.safeStop==="true",
+        tripId: x.tripId,
+        category: x.category,
+        message: x.message,
+        safeStop: x.safeStop === "true",
         delayMinutes: Number(x.delayMinutes),
         simulated: d.organization.demo,
       }),
@@ -866,6 +918,7 @@ function App() {
             (v) => v.id === d.trips.find((t) => t.id === l.tripId)?.vehicleId,
           )?.name || "Ônibus",
         position: l.position,
+        progress: l.progress,
       }));
   const newActions: Record<string, () => void> = {
     "/vehicles": () => openVehicle(),
@@ -969,10 +1022,7 @@ function App() {
     <div className="app-shell">
       <aside className={`sidebar ${mobile ? "open" : ""}`}>
         <NavLink to="/" className="brand">
-          <span>
-            <BusIcon />
-          </span>
-          trackbus<span className="brand-period">.</span>
+          <Brand />
         </NavLink>
         <div className="organization">
           <span className="school-logo">
@@ -1211,7 +1261,10 @@ function App() {
                     </button>
                   </div>
                   <MapView
-                    routes={active.map((t) => t.snapshot)}
+                    routes={active.map((t) => ({
+                      ...t.snapshot,
+                      tripId: t.id,
+                    }))}
                     positions={positions}
                   />
                   <div className="map-footer">
@@ -1315,18 +1368,22 @@ function App() {
           )}
           {path === "/map" && (
             <>
-              {role === "student" ? <SmartJourney/> : role === "guardian" ? (
+              {role === "student" ? (
+                <SmartJourney />
+              ) : role === "guardian" ? (
                 <Portal d={d} refresh={refresh} />
               ) : (
                 <div className="monitor-layout">
                   <div className="panel">
-                    <MapView onTripDetails={setTripId} onNotices={()=>nav("/notices")}
+                    <MapView
+                      onTripDetails={setTripId}
+                      onNotices={() => nav("/notices")}
                       large
                       routes={d.trips
                         .filter(
                           (t) => !["completed", "cancelled"].includes(t.status),
                         )
-                        .map((t) => t.snapshot)}
+                        .map((t) => ({ ...t.snapshot, tripId: t.id }))}
                       positions={positions}
                     />
                   </div>
@@ -1407,17 +1464,29 @@ function App() {
                       <span>
                         <Clock size={15} />
                         {r.shift}
+                        {r.departureTime ? " · " + r.departureTime : ""}
                       </span>
                       <span>v{r.version}</span>
                     </div>
                     <div className="route-card-actions">
-                      <button className="button secondary" onClick={()=>act(`/routes/${r.id}/visibility`,{published:!r.published})}>{r.published?"Ocultar dos alunos":"Publicar para alunos"}</button>
+                      <button
+                        className="button secondary"
+                        onClick={() =>
+                          act(`/routes/${r.id}/visibility`, {
+                            published: !r.published,
+                          })
+                        }
+                      >
+                        {r.published
+                          ? "Ocultar dos alunos"
+                          : "Publicar para alunos"}
+                      </button>
                       <button
                         className="text-button"
                         disabled={!d.routingConfigured}
                         title={
                           d.routingConfigured
-                            ? "Calcular com Valhalla"
+                            ? "Calcular pela rede local ou provedor institucional"
                             : "Provedor geográfico não configurado"
                         }
                         onClick={() => act(`/routes/${r.id}/calculate`)}
@@ -1438,6 +1507,7 @@ function App() {
                             name: `${r.name} · cópia`,
                             description: r.description,
                             shift: r.shift,
+                            departureTime: r.departureTime,
                             stops: r.stops.map((st) => ({
                               ...st,
                               id: crypto.randomUUID(),
@@ -2149,7 +2219,7 @@ function App() {
           )}
           {path === "/settings" && (
             <div className="settings-grid">
-              {d.organization.demo&&<DemoControls d={d} refresh={refresh}/>}
+              {d.organization.demo && <DemoControls d={d} refresh={refresh} />}
               <section className="panel settings-card">
                 <span className="settings-icon">
                   <GraduationCap />
@@ -2288,6 +2358,7 @@ function App() {
       )}{" "}
       {routeEdit && (
         <RouteEditor
+          school={d.organization.name}
           route={routeEdit === "new" ? undefined : routeEdit}
           onClose={() => setRouteEdit(null)}
           onSaved={refresh}
@@ -2475,16 +2546,20 @@ function TripCard({
   );
 }
 function RouteEditor({
+  school,
   route,
   onClose,
   onSaved,
 }: {
+  school: string;
   route?: Route;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [name, setName] = useState(route?.name || ""),
     [shift, setShift] = useState(route?.shift || "Manhã"),
+    [departureTime, setDepartureTime] = useState(route?.departureTime || ""),
+    [active, setActive] = useState(route?.active ?? true),
     [description, setDescription] = useState(route?.description || ""),
     [stops, setStops] = useState<Stop[]>(route?.stops || []),
     [saving, setSaving] = useState(false);
@@ -2502,17 +2577,21 @@ function RouteEditor({
     <Modal
       wide
       title={route ? "Editar itinerário" : "Criar rota"}
-      subtitle="Clique no mapa para adicionar paradas. O traçado é esquemático; viagens existentes preservam sua versão."
+      subtitle="Clique na origem, nas paradas e no destino. Arraste os marcadores para ajustar. Vias locais conectadas são calculadas ao salvar."
       onClose={onClose}
     >
       <div className="route-editor">
         <div className="route-editor-form">
           <label>
+            Escola
+            <input value={school} readOnly />
+          </label>
+          <label>
             Nome da rota
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ex.: Rota 04 · Pituba"
+              placeholder="Ex.: Rota 04 · Campina Grande"
             />
           </label>
           <label>
@@ -2531,6 +2610,28 @@ function RouteEditor({
               rows={2}
             />
           </label>
+          <label>
+            Horário de referência
+            <input
+              type="time"
+              value={departureTime}
+              onChange={(e) => setDepartureTime(e.target.value)}
+            />
+          </label>
+          <label>
+            Situação
+            <select
+              value={active ? "active" : "inactive"}
+              onChange={(e) => setActive(e.target.value === "active")}
+            >
+              <option value="active">Ativa</option>
+              <option value="inactive">Inativa</option>
+            </select>
+          </label>
+          <small>
+            O horário da viagem será definido na programação. A primeira parada
+            é a origem; a última é o destino.
+          </small>
           <div className="stops-heading">
             <h3>
               Paradas <span>{stops.length}</span>
@@ -2538,7 +2639,7 @@ function RouteEditor({
             <button
               className="text-button"
               onClick={() =>
-                add({ lat: -12.98 + stops.length * 0.001, lng: -38.49 })
+                add({ lat: -7.2185 + stops.length * 0.001, lng: -35.8855 })
               }
             >
               <Plus size={14} /> Manual
@@ -2633,18 +2734,33 @@ function RouteEditor({
         <MapView
           large
           routes={
-            stops.length > 1
+            stops.length > 0
               ? [
                   {
                     name,
                     stops,
-                    geometry: stops.map((s) => [s.lng, s.lat]),
-                    routed: false,
+                    geometry:
+                      route?.routed &&
+                      JSON.stringify(stops.map((s) => [s.id, s.lat, s.lng])) ===
+                        JSON.stringify(
+                          route.stops.map((s) => [s.id, s.lat, s.lng]),
+                        )
+                        ? route.geometry
+                        : stops.map((s) => [s.lng, s.lat]),
+                    routed:
+                      !!route?.routed &&
+                      JSON.stringify(stops.map((s) => [s.id, s.lat, s.lng])) ===
+                        JSON.stringify(
+                          route.stops.map((s) => [s.id, s.lat, s.lng]),
+                        ),
                   },
                 ]
               : []
           }
           onPick={add}
+          onMoveStop={(id, p) =>
+            setStops(stops.map((s) => (s.id === id ? { ...s, ...p } : s)))
+          }
         />
       </div>
       <div className="form-actions">
@@ -2667,8 +2783,9 @@ function RouteEditor({
                   name,
                   description,
                   shift,
+                  departureTime,
                   stops,
-                  active: route?.active ?? true,
+                  active,
                 },
                 route ? "PUT" : "POST",
               );
@@ -2811,9 +2928,18 @@ function TripDetail({
       <div className="trip-detail-layout">
         <div>
           <MapView
-            routes={[t.snapshot]}
+            routes={[{ ...t.snapshot, tripId: t.id }]}
             positions={
-              loc ? [{ id: t.id, label: t.name, position: loc.position }] : []
+              loc
+                ? [
+                    {
+                      id: t.id,
+                      label: t.name,
+                      position: loc.position,
+                      progress: loc.progress,
+                    },
+                  ]
+                : []
             }
           />
           <div className="detail-facts">
@@ -2872,23 +2998,25 @@ function TripDetail({
                   <Bell size={15} /> Avisar passageiros
                 </button>
               </div>
-              {d.actor.role === "driver" && t.status !== "scheduled" && t.trackingMode!=="simulation" && (
-                <div className="gps-control">
-                  <button
-                    className="button secondary"
-                    disabled={!safe}
-                    onClick={toggleGps}
-                  >
-                    <Satellite size={16} />
-                    {watch.current === null ? "Ativar GPS" : "Desativar GPS"}
-                  </button>
-                  <span>{gps}</span>
-                  <small>
-                    Mantenha a página aberta. O navegador pode suspender a
-                    transmissão em segundo plano.
-                  </small>
-                </div>
-              )}
+              {d.actor.role === "driver" &&
+                t.status !== "scheduled" &&
+                t.trackingMode !== "simulation" && (
+                  <div className="gps-control">
+                    <button
+                      className="button secondary"
+                      disabled={!safe}
+                      onClick={toggleGps}
+                    >
+                      <Satellite size={16} />
+                      {watch.current === null ? "Ativar GPS" : "Desativar GPS"}
+                    </button>
+                    <span>{gps}</span>
+                    <small>
+                      Mantenha a página aberta. O navegador pode suspender a
+                      transmissão em segundo plano.
+                    </small>
+                  </div>
+                )}
               <div className="wait-control">
                 <select
                   id="wait-stop"
@@ -2927,40 +3055,44 @@ function TripDetail({
               )}
             </div>
           )}
-          {d.actor.role === "admin" && d.organization.demo && t.trackingMode!=="gps" && !terminal && (
-            <div className="simulator">
-              <div>
-                <FlaskConical size={20} />
-                <strong>Simulador de percurso</strong>
-                <Badge>SIMULAÇÃO — POSIÇÃO FICTÍCIA</Badge>
-              </div>
-              <p>
-                Posições fictícias publicadas no mesmo fluxo de acompanhamento.
-              </p>
-              <div>
-                <label>
-                  Velocidade
-                  <select
-                    value={speed}
-                    onChange={(e) => setSpeed(Number(e.target.value))}
+          {d.actor.role === "admin" &&
+            d.organization.demo &&
+            t.trackingMode !== "gps" &&
+            !terminal && (
+              <div className="simulator">
+                <div>
+                  <FlaskConical size={20} />
+                  <strong>Simulador de percurso</strong>
+                  <Badge>SIMULAÇÃO — POSIÇÃO FICTÍCIA</Badge>
+                </div>
+                <p>
+                  Posições fictícias publicadas no mesmo fluxo de
+                  acompanhamento.
+                </p>
+                <div>
+                  <label>
+                    Velocidade
+                    <select
+                      value={speed}
+                      onChange={(e) => setSpeed(Number(e.target.value))}
+                    >
+                      <option value={2}>7 km/h</option>
+                      <option value={7}>25 km/h</option>
+                      <option value={14}>50 km/h</option>
+                      <option value={20}>72 km/h</option>
+                    </select>
+                  </label>
+                  <button
+                    className="button primary"
+                    disabled={t.status !== "in_progress"}
+                    onClick={() => setRunning(!running)}
                   >
-                    <option value={2}>7 km/h</option>
-                    <option value={7}>25 km/h</option>
-                    <option value={14}>50 km/h</option>
-                    <option value={20}>72 km/h</option>
-                  </select>
-                </label>
-                <button
-                  className="button primary"
-                  disabled={t.status !== "in_progress"}
-                  onClick={() => setRunning(!running)}
-                >
-                  {running ? <Pause size={16} /> : <Play size={16} />}{" "}
-                  {running ? "Pausar simulação" : "Iniciar simulação"}
-                </button>
+                    {running ? <Pause size={16} /> : <Play size={16} />}{" "}
+                    {running ? "Pausar simulação" : "Iniciar simulação"}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
         <aside className="itinerary">
           <h3>Itinerário da viagem</h3>
@@ -2999,8 +3131,7 @@ function Portal({ d }: { d: State; refresh: () => void }) {
   const [selectedStudentId, setSelectedStudentId] = useState(
       d.students[0]?.id || "",
     ),
-    st =
-      d.students.find((s) => s.id === selectedStudentId) || d.students[0],
+    st = d.students.find((s) => s.id === selectedStudentId) || d.students[0],
     t = d.trips.find(
       (t) =>
         t.routeId === st?.routeId &&
@@ -3030,11 +3161,20 @@ function Portal({ d }: { d: State; refresh: () => void }) {
       <section className="panel">
         <MapView
           large
-          routes={[t.snapshot]}
+          routes={[{ ...t.snapshot, tripId: t.id }]}
           walking={walking?.geometry}
           studentPosition={studentPosition}
           positions={
-            loc ? [{ id: t.id, label: t.name, position: loc.position }] : []
+            loc
+              ? [
+                  {
+                    id: t.id,
+                    label: t.name,
+                    position: loc.position,
+                    progress: loc.progress,
+                  },
+                ]
+              : []
           }
         />
       </section>

@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   description:
     "Gestão e acompanhamento do transporte escolar. I.See Technologies.",
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/favicon.svg" },
+  icons: { icon: "/icon-192.png" },
 };
 export default function Layout({
   children,

@@ -13,6 +13,7 @@ import type {
   Stop,
   TripStatus,
 } from "../packages/domain";
+import type { TrackingProgress } from "../packages/domain/tracking";
 const pk = () => text("id").primaryKey();
 export const organizations = sqliteTable("organizations", {
   id: pk(),
@@ -20,7 +21,7 @@ export const organizations = sqliteTable("organizations", {
   ownerId: text("owner_id").notNull().unique(),
   demo: integer("demo", { mode: "boolean" }).notNull().default(true),
   maxWait: integer("max_wait").notNull().default(300),
-  roomOpen: integer("room_open",{mode:"boolean"}).notNull().default(false),
+  roomOpen: integer("room_open", { mode: "boolean" }).notNull().default(false),
   safetyMargin: integer("safety_margin").notNull().default(3),
   createdAt: integer("created_at").notNull(),
 });
@@ -89,12 +90,15 @@ export const routes = sqliteTable(
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
     shift: text("shift").notNull(),
+    departureTime: text("departure_time").notNull().default(""),
     stops: text("stops", { mode: "json" }).$type<Stop[]>().notNull(),
     geometry: text("geometry", { mode: "json" })
       .$type<[number, number][]>()
       .notNull(),
     routed: integer("routed", { mode: "boolean" }).notNull().default(false),
-    published: integer("published",{mode:"boolean"}).notNull().default(false),
+    published: integer("published", { mode: "boolean" })
+      .notNull()
+      .default(false),
     version: integer("version").notNull().default(1),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
   },
@@ -177,7 +181,10 @@ export const trips = sqliteTable(
     waitUntil: integer("wait_until"),
     waitStopId: text("wait_stop_id"),
     simProgress: real("sim_progress").notNull().default(0),
-    trackingMode: text("tracking_mode").$type<"gps"|"simulation"|"unassigned">().notNull().default("unassigned"),
+    trackingMode: text("tracking_mode")
+      .$type<"gps" | "simulation" | "unassigned">()
+      .notNull()
+      .default("unassigned"),
     revision: integer("revision").notNull().default(0),
   },
   (t) => [index("trip_org_time").on(t.orgId, t.plannedStart)],
@@ -190,6 +197,7 @@ export const locations = sqliteTable("locations", {
     .unique()
     .references(() => trips.id),
   position: text("position", { mode: "json" }).$type<Position>().notNull(),
+  progress: text("progress", { mode: "json" }).$type<TrackingProgress>(),
   updatedAt: integer("updated_at").notNull(),
 });
 export const tripEvents = sqliteTable(
@@ -354,15 +362,48 @@ export const rateLimits = sqliteTable(
   (t) => [index("rate_expiry").on(t.expires)],
 );
 // Guest and device credentials are opaque random values. Only digests are stored.
-export const accessSessions = sqliteTable('access_sessions', {
-  id: pk(), orgId: org(), subject: text('subject').notNull(), name: text('name').notNull(),
-  kind: text('kind').$type<'visitor'|'pair'|'device'>().notNull(), expires: integer('expires').notNull(),
-}, t=>[index('access_expiry').on(t.expires),index('access_org_subject').on(t.orgId,t.subject)]);
-export const journeyPreferences = sqliteTable('journey_preferences', {
-  id:pk(), orgId:org(), subject:text('subject').notNull(), routeId:text('route_id').notNull().references(()=>routes.id),
-  stopId:text('stop_id').notNull(), favorite:integer('favorite',{mode:'boolean'}).notNull(),
-  selected:integer('selected',{mode:'boolean'}).notNull(), notify:integer('notify',{mode:'boolean'}).notNull(),
-},t=>[uniqueIndex('journey_subject_route').on(t.orgId,t.subject,t.routeId)]);
-export const pushSubscriptions=sqliteTable('push_subscriptions',{
- id:pk(),orgId:org(),subject:text('subject').notNull(),endpoint:text('endpoint').notNull(),expires:integer('expires').notNull(),lastNotice:text('last_notice'),
-},t=>[index('push_org_subject').on(t.orgId,t.subject)]);
+export const accessSessions = sqliteTable(
+  "access_sessions",
+  {
+    id: pk(),
+    orgId: org(),
+    subject: text("subject").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind").$type<"visitor" | "pair" | "device">().notNull(),
+    expires: integer("expires").notNull(),
+  },
+  (t) => [
+    index("access_expiry").on(t.expires),
+    index("access_org_subject").on(t.orgId, t.subject),
+  ],
+);
+export const journeyPreferences = sqliteTable(
+  "journey_preferences",
+  {
+    id: pk(),
+    orgId: org(),
+    subject: text("subject").notNull(),
+    routeId: text("route_id")
+      .notNull()
+      .references(() => routes.id),
+    stopId: text("stop_id").notNull(),
+    favorite: integer("favorite", { mode: "boolean" }).notNull(),
+    selected: integer("selected", { mode: "boolean" }).notNull(),
+    notify: integer("notify", { mode: "boolean" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("journey_subject_route").on(t.orgId, t.subject, t.routeId),
+  ],
+);
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: pk(),
+    orgId: org(),
+    subject: text("subject").notNull(),
+    endpoint: text("endpoint").notNull(),
+    expires: integer("expires").notNull(),
+    lastNotice: text("last_notice"),
+  },
+  (t) => [index("push_org_subject").on(t.orgId, t.subject)],
+);

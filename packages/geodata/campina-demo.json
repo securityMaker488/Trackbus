@@ -1,0 +1,11 @@
+{
+  "name": "Circuito Congretech · Açude Velho",
+  "street": "Rua Doutor Severino Cruz, Campina Grande/PB",
+  "sourceWay": "https://www.openstreetmap.org/way/29472970",
+  "notice": "Pontos de referência sobre via pública mapeada. Não são paradas escolares homologadas. Validar segurança, acessibilidade e autorização de parada no local antes da apresentação.",
+  "points": [
+    {"id": "acude-inicio", "name": "Açude Velho · início", "lat": -7.2227228, "lng": -35.8774256, "sourceNode": 324829260},
+    {"id": "acude-intermediaria", "name": "Açude Velho · ponto intermediário", "lat": -7.2249866, "lng": -35.8807931, "sourceNode": 324829370},
+    {"id": "acude-final", "name": "Açude Velho · chegada", "lat": -7.2257942, "lng": -35.8845174, "sourceNode": 324829379}
+  ]
+}

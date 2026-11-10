@@ -1,0 +1,113 @@
+.map-search {
+  position: absolute;
+  z-index: 6;
+  top: 12px;
+  left: 12px;
+  width: min(360px, calc(100% - 72px));
+  color: #fde047;
+}
+.map-search form {
+  display: flex;
+  gap: 4px;
+  padding: 5px;
+  background: #141414;
+  border: 1px solid #a16207;
+  border-radius: 12px;
+}
+.map-search input {
+  min-width: 0;
+  flex: 1;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  background: #141414;
+  color: #fde047;
+  font-size: 12px;
+}
+.map-search button {
+  color: #facc15;
+  border: 0;
+  background: #202020;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+}
+.map-search-results {
+  display: grid;
+  background: #141414;
+  border: 1px solid #a16207;
+  border-radius: 10px;
+  padding: 6px;
+  max-height: 235px;
+  overflow: auto;
+  margin-top: 5px;
+  gap: 3px;
+}
+.map-search-results button {
+  text-align: left;
+  font-size: 13px;
+}
+.map-search small {
+  font-size: 10px;
+  padding: 6px;
+}
+.map-search p {
+  background: #141414;
+  padding: 8px;
+  font-size: 12px;
+}
+.map-frame .map-tag {
+  top: 73px;
+  max-width: calc(100% - 85px);
+}
+.journey-route-cards {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+.journey-route-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 18px;
+  border: 1px solid #a16207;
+  border-radius: 14px;
+  color: #fde047;
+  background: #202020;
+  text-align: left;
+  cursor: pointer;
+}
+.journey-route-card.selected {
+  border: 2px solid #facc15;
+  background: #141414;
+}
+.journey-route-card span {
+  display: grid;
+  gap: 8px;
+}
+.journey-route-card small {
+  font-size: 12px;
+  font-weight: 400;
+}
+.journey-route-card svg {
+  flex-shrink: 0;
+}
+@media (max-width: 760px) {
+  .map-search {
+    left: 8px;
+    top: 8px;
+    width: calc(100% - 60px);
+  }
+  .map-frame .map-tag {
+    top: 68px;
+    left: 8px;
+  }
+  .map-search input {
+    font-size: 11px;
+  }
+  .journey-route-card {
+    padding: 14px;
+  }
+}

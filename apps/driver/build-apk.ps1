@@ -1,5 +1,17 @@
 param([Parameter(Mandatory)][string]$SdkRoot,[Parameter(Mandatory)][string]$BuildCache)
 $ErrorActionPreference='Stop'
+if($PSScriptRoot.Length -gt 80){
+  $shortApp=Join-Path ([IO.Path]::GetFullPath($BuildCache)) 'app'
+  [void](New-Item -ItemType Directory -Force $shortApp)
+  foreach($name in @('package.json','package-lock.json','app.json','tsconfig.json','assets.d.ts','index.ts','App.tsx','tracking.ts','build-apk.ps1')){
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $shortApp $name) -Force
+  }
+  Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'assets') -Destination $shortApp -Recurse -Force
+  Push-Location $shortApp
+  try { & npm ci; if($LASTEXITCODE){throw 'Falha ao instalar dependências Android'} } finally { Pop-Location }
+  & (Join-Path $shortApp 'build-apk.ps1') -SdkRoot $SdkRoot -BuildCache $BuildCache
+  return
+}
 $env:ANDROID_HOME=(Resolve-Path -LiteralPath $SdkRoot).Path
 $env:ANDROID_SDK_ROOT=$env:ANDROID_HOME
 $env:CI='1'

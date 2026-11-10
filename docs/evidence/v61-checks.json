@@ -1,0 +1,50 @@
+{
+  "date": "2026-11-10",
+  "baselineCommit": "ce6bc1f4167fbfc323839617b1f8d6f2cdf5b5c8",
+  "unitIntegration": {
+    "files": 7,
+    "passed": 57
+  },
+  "e2e": {
+    "passed": 5,
+    "browser": "Microsoft Edge",
+    "api": "real local Worker",
+    "database": "local D1",
+    "tilesBlockedInSuite": true
+  },
+  "liveMap": {
+    "tiles200": 30,
+    "sourceUnavailable": false,
+    "date": "2026-11-10"
+  },
+  "typecheck": true,
+  "nativeTypecheck": true,
+  "lint": true,
+  "staticFindings": 0,
+  "npmAudit": {
+    "root": 0,
+    "driver": 0
+  },
+  "webBuild": true,
+  "android": {
+    "package": "tech.isee.trackbus.driver",
+    "version": "6.1.0",
+    "versionCode": 7,
+    "abi": "arm64-v8a",
+    "bytes": 24111816,
+    "sha256": "894B29749E73B4ADEE9CB994B9D31E0F1F65D68C97DEDF93366D49E1B36F726D",
+    "signatureV2": true,
+    "physicalDeviceTest": false,
+    "sourceFilesMatched": true
+  },
+  "remoteDeploy": false,
+  "pushed": false,
+  "migrationsLocal": [
+    "0004_v6_route_schedule.sql",
+    "0005_gps_route_progress.sql"
+  ],
+  "officialLogo": {
+    "sourceUnmodified": true,
+    "sha256": "175C13F124B24B0B9E063B0DE5C8B376CD29049FF065E2CEFA411BB3C8CA3108"
+  }
+}

@@ -1,0 +1,11 @@
+# Diagnóstico
+- Sem escolas na entrada: administrador precisa criar demonstração e abrir Sala Smart Journey em Configurações. Site privado ainda exige acesso ao gateway.
+- Rota ausente no aluno: conferir mesma escola, active e published; não é necessário associar cadastro do aluno à rota.
+- Rota perde mudanças: verificar resposta da API e migração 0004; capturar X-Request-ID. Não limpar D1 para tentar resolver.
+- Traçado esquemático/ETA indisponível: cálculo viário precisa de pontos conectados ao recorte ou Valhalla configurado. Velocidade zero, posição velha e interrupção sem prazo também tornam ETA indisponível.
+- Mapa sem ruas: verificar rede e tiles OSM; testes E2E abortam tiles de propósito e não provam carregamento cartográfico externo.
+- Código Android recusado: 16 caracteres hex, uso único, 2min; gerar outro com conta autorizada. API deve estar acessível por HTTPS ao telefone.
+- GPS parou: conferir permissões, notificação persistente, bateria, encerramento forçado, sessão 8h e estado da viagem. Não trocar para simulação silenciosamente.
+- Ninja/caminho longo Windows: usar BuildCache curto. Script copia fonte para staging, sem apagar checkout.
+- Push indisponível: registro de SW HTTPS ativo, suporte do browser, chaves no servidor e permissão. Central interna continua disponível.
+- Login ao publicar Cloudflare próprio: falta fronteira de identidade verificada; ver SECURITY.md. Não criar bypass por headers de cliente.

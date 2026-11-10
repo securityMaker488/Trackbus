@@ -18,6 +18,12 @@ jobs:
       - run: npm run security
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build
+      - run: npm ci --prefix apps/driver
+      - run: npm run typecheck --prefix apps/driver
+      - run: npm audit --prefix apps/driver --audit-level=high
+      - run: npm run db:migrate:local
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
   codeql:
     runs-on: ubuntu-latest
     permissions:

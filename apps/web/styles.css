@@ -204,6 +204,31 @@ code {
   z-index: 40;
   padding: 28px 16px 18px;
 }
+.trackbus-logo {
+  display: block;
+  width: 104px;
+  height: 104px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 12px;
+}
+.sidebar .brand {
+  justify-content: center;
+}
+.trackbus-logo-large {
+  width: min(100%, 420px);
+  height: auto;
+  border-radius: 28px;
+}
+.welcome-art .orb {
+  background: transparent;
+  transform: none;
+  width: min(100%, 420px);
+  height: auto;
+}
+.welcome-art .orbit {
+  display: none;
+}
 .brand {
   display: flex;
   align-items: center;
@@ -1174,7 +1199,9 @@ tr:hover td {
 }
 .route-card-actions {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-start;
   align-items: center;
 }
 .notice-row {

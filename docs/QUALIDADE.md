@@ -1,3 +1,5 @@
+> Registro histórico V2. Para o estado atual, consultar [V6-ENTREGA.md](V6-ENTREGA.md) e [TESTING.md](TESTING.md).
+
 # Evidências de qualidade — 3 de novembro de 2026
 
 ## Verificado nesta entrega

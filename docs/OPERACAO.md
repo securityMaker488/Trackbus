@@ -1,3 +1,5 @@
+> O roteiro vigente para Campina Grande e o app nativo está em [DEMO.md](DEMO.md) e [DRIVER.md](DRIVER.md). Este guia preserva operações complementares.
+
 # Operação e demonstração
 
 ## Acesso
@@ -11,7 +13,7 @@ O seletor **Perfil de demonstração** troca a autorização no servidor. Use Ad
 1. Como administrador, confira o painel, abra Veículos e cadastre um registro. Recarregue para mostrar persistência.
 2. Abra Rotas e paradas. Edite uma rota, inclua/reordene paradas e salve. As viagens existentes conservam o itinerário original.
 3. Abra uma viagem em andamento. Confirme a operação com veículo parado e ative o simulador. Ele avança enquanto essa janela permanece aberta; os dados seguem a mesma API de leitura e aparecem como **SIMULADO**.
-4. Em outro contexto de navegador, entre como Aluno ou Responsável. Acompanhe somente a rota vinculada. A atualização é por consulta autenticada a cada cinco segundos.
+4. Em outro contexto de navegador, entre como Aluno ou Responsável. Escolha entre as rotas publicadas da escola; responsável acompanha dependentes vinculados. A atualização é por consulta autenticada a cada cinco segundos.
 5. Envie um aviso de atraso de dez minutos. Confirme o aviso no perfil do aluno e a atualização do ETA quando houver posição recente e condições suficientes.
 6. Registre pane mecânica. A viagem fica interrompida e uma ocorrência é criada. Resolva-a em Ocorrências para comunicar retomada.
 7. Como Monitor, registre embarque e desembarque. O servidor rejeita desembarque anterior ao embarque e duplicidade.

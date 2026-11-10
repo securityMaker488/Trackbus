@@ -1,4 +1,5 @@
 import snapshot from "./salvador.json";
+import campina from "./campina.json";
 import { distance, type Point } from "../domain";
 
 type Mode = "bus" | "pedestrian";
@@ -24,7 +25,12 @@ type Step = {
   cost: number;
   parent?: Step;
 };
-let cached: Network | undefined;
+const cached = new Map<object, Network>();
+export const localCoverages = [snapshot, campina].map((s) => ({
+  bbox: s.bbox,
+  date: s.dataDate,
+  attribution: s.attribution,
+}));
 export const localCoverage = {
   bbox: snapshot.bbox,
   date: snapshot.dataDate,
@@ -55,8 +61,11 @@ function* integers(encoded: string) {
   }
 }
 const signed = (n: number) => (n % 2 ? -(n + 1) / 2 : n / 2);
-function getNetwork(): Network {
-  if (cached) return cached;
+function getNetwork(
+  snapshot: typeof campina | typeof import("./salvador.json"),
+): Network {
+  const ready = cached.get(snapshot);
+  if (ready) return ready;
   const nodes: Point[] = [],
     edges: Edge[] = [];
   const points = integers(snapshot.points),
@@ -91,10 +100,11 @@ function getNetwork(): Network {
     list.push(rule);
     restrictions.set(rule[0], list);
   }
-  cached = { nodes, edges, incident, restrictions };
-  return cached;
+  const network = { nodes, edges, incident, restrictions };
+  cached.set(snapshot, network);
+  return network;
 }
-function inside(p: Point): boolean {
+function inside(p: Point, snapshot: { bbox: number[] }): boolean {
   const [west, south, east, north] = snapshot.bbox;
   return (
     Number.isFinite(p.lat) &&
@@ -353,9 +363,12 @@ export function calculateLocalRoute(
   points: Point[],
   mode: Mode,
 ): LocalRoute | null {
-  if (points.length < 2 || points.length > 64 || !points.every(inside))
-    return null;
-  const net = getNetwork(),
+  if (points.length < 2 || points.length > 64) return null;
+  const coverage = [campina, snapshot].find((s) =>
+    points.every((p) => inside(p, s)),
+  );
+  if (!coverage) return null;
+  const net = getNetwork(coverage),
     snaps = points.map((p) => snap(p, net, mode));
   if (snaps.some((p) => !p)) return null;
   let meters = 0,
