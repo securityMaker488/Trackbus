@@ -100,6 +100,7 @@ export const routes = sqliteTable(
       .notNull()
       .default(false),
     version: integer("version").notNull().default(1),
+    archivedAt: integer("archived_at"),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
   },
   (t) => [index("route_org").on(t.orgId)],

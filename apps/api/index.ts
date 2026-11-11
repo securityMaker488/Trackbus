@@ -3,12 +3,13 @@ import { HTTPException } from "hono/http-exception";
 import { bodyLimit } from "hono/body-limit";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { drizzle, type DrizzleD1Database } from "drizzle-orm/d1";
-import { and, eq, desc, lt, gt, sql, inArray } from "drizzle-orm";
+import { and, eq, desc, lt, gt, sql, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import * as s from "../../db/schema";
 import * as v from "../../packages/validation";
 import {
   canTransition,
+  activeRoles,
   estimateArrival,
   validatePosition,
   interpolate,
@@ -19,6 +20,7 @@ import {
   type Position,
 } from "../../packages/domain";
 import { seedDemo } from "./seed";
+import { verifyAccessIdentity, type AccessConfig } from "./cloudflare-identity";
 import { trackJourney, visibleProgress } from "../../packages/domain/tracking";
 import { calculateRoute } from "./routing";
 import { calculateLocalRoute } from "../../packages/geodata";
@@ -41,7 +43,7 @@ type Actor = {
   demo: boolean;
   visitor?: boolean;
 };
-export type Bindings = {
+export type Bindings = AccessConfig & {
   DB: D1Database;
   VALHALLA_URL?: string;
   VAPID_PUBLIC_KEY?: string;
@@ -54,6 +56,7 @@ type Env = {
     db: DrizzleD1Database;
     actor: Actor;
     identity: string;
+    identityEmail: string;
     requestId: string;
   };
 };
@@ -61,7 +64,7 @@ type C = Context<Env>;
 type Trip = typeof s.trips.$inferSelect;
 const app = new Hono<Env>().basePath("/api");
 function fail(
-  status: 400 | 401 | 403 | 404 | 409 | 422 | 429 | 503,
+  status: 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429 | 503,
   message: string,
 ): never {
   throw new HTTPException(status, { message });
@@ -159,7 +162,18 @@ async function allowedTrips(c: C) {
     all = await db
       .select()
       .from(s.trips)
-      .where(eq(s.trips.orgId, a.orgId))
+      .where(
+        and(
+          eq(s.trips.orgId, a.orgId),
+          inArray(
+            s.trips.routeId,
+            db
+              .select({ id: s.routes.id })
+              .from(s.routes)
+              .where(isNull(s.routes.archivedAt)),
+          ),
+        ),
+      )
       .orderBy(desc(s.trips.plannedStart))
       .limit(500);
   if (a.role === "admin") return all;
@@ -215,7 +229,13 @@ async function routeRef(c: C, id: string) {
     .get("db")
     .select()
     .from(s.routes)
-    .where(and(eq(s.routes.id, id), eq(s.routes.orgId, c.get("actor").orgId)));
+    .where(
+      and(
+        eq(s.routes.id, id),
+        eq(s.routes.orgId, c.get("actor").orgId),
+        isNull(s.routes.archivedAt),
+      ),
+    );
   if (!r) fail(422, "Rota inválida para esta instituição");
   return r;
 }
@@ -259,6 +279,14 @@ app.use("*", async (c, next) => {
   await next();
 });
 app.get("/health", (c) => c.json({ service: "TrackBus", status: "ok" }));
+app.get("/auth/config", (c) =>
+  c.json({
+    loginPath:
+      c.env.AUTH_PROVIDER === "cloudflare-access"
+        ? "/entrar"
+        : "/signin-with-chatgpt?return_to=/",
+  }),
+);
 app.get("/journey/schools", async (c) =>
   c.json(
     await c
@@ -431,7 +459,26 @@ app.use("*", async (c, next) => {
     await next();
     return;
   }
-  const identity = c.req.header("oai-authenticated-user-id");
+  let identity: string | undefined;
+  if (c.env.AUTH_PROVIDER === "cloudflare-access") {
+    try {
+      const authenticated = await verifyAccessIdentity(
+        c.req.header("Cf-Access-Jwt-Assertion") ||
+          getCookie(c, "CF_Authorization") ||
+          "",
+        c.env,
+      );
+      identity = authenticated.id;
+      c.set("identityEmail", authenticated.email);
+    } catch {
+      fail(401, "Entre na operação com sua conta autorizada.");
+    }
+  } else if (
+    c.env.AUTH_PROVIDER === undefined ||
+    c.env.AUTH_PROVIDER === "sites"
+  )
+    identity = c.req.header("oai-authenticated-user-id");
+  else fail(503, "Provedor de identidade não configurado.");
   if (!identity) fail(401, "Entre com sua conta para continuar");
   c.set("identity", identity);
   const [m] = await db
@@ -472,20 +519,37 @@ app.use("*", async (c, next) => {
           eq(s.demoSessions.orgId, org.id),
         ),
       );
-    if (session && session.expires > Date.now())
+    if (
+      session &&
+      session.expires > Date.now() &&
+      activeRoles.some((role) => role === session.role)
+    )
       a = {
         ...a,
         role: session.role,
         userId: session.actorId,
         name: {
           admin: m.name,
-          driver: "Carlos Oliveira",
-          student: "Ana Lima",
+          driver:
+            (
+              await db
+                .select({ name: s.drivers.name })
+                .from(s.drivers)
+                .where(
+                  and(
+                    eq(s.drivers.orgId, org.id),
+                    eq(s.drivers.userId, session.actorId),
+                  ),
+                )
+            )[0]?.name || "Motorista",
+          student: "Aluno da demonstração",
           guardian: "Camila Lima",
           monitor: "Monitor demonstrativo",
         }[session.role],
       };
   }
+  if (!activeRoles.some((role) => role === a.role))
+    fail(403, "Perfil desativado. Use aluno, motorista ou administrador.");
   c.set("actor", a);
   if (c.req.method !== "GET") {
     const now = Date.now(),
@@ -778,8 +842,16 @@ app.get("/driver/incidents", async (c) => {
 });
 app.post("/bootstrap", async (c) => {
   if (c.get("actor")) fail(409, "Instituição já configurada");
+  if (
+    c.env.AUTH_PROVIDER === "cloudflare-access" &&
+    (!c.env.INITIAL_ADMIN_EMAIL ||
+      c.get("identityEmail") !== c.env.INITIAL_ADMIN_EMAIL.toLowerCase())
+  )
+    fail(403, "Configuração inicial exclusiva do administrador autorizado.");
   const name =
-    c.req.header("oai-authenticated-user-full-name") || "Administrador";
+    c.env.AUTH_PROVIDER === "cloudflare-access"
+      ? "Administrador"
+      : c.req.header("oai-authenticated-user-full-name") || "Administrador";
   await seedDemo(c.get("db"), c.get("identity"), name);
   return c.json({ ok: true }, 201);
 });
@@ -796,7 +868,7 @@ app.post("/demo/profile", async (c) => {
     c,
     z
       .object({
-        role: z.enum(["admin", "driver", "student", "guardian", "monitor"]),
+        role: z.enum(activeRoles),
       })
       .strict(),
   );
@@ -878,7 +950,11 @@ app.get("/state", async (c) => {
     db.select().from(s.organizations).where(eq(s.organizations.id, orgId)),
     db.select().from(s.vehicles).where(eq(s.vehicles.orgId, orgId)).limit(500),
     db.select().from(s.drivers).where(eq(s.drivers.orgId, orgId)).limit(500),
-    db.select().from(s.routes).where(eq(s.routes.orgId, orgId)).limit(500),
+    db
+      .select()
+      .from(s.routes)
+      .where(and(eq(s.routes.orgId, orgId), isNull(s.routes.archivedAt)))
+      .limit(500),
     db.select().from(s.students).where(eq(s.students.orgId, orgId)).limit(500),
     db
       .select()
@@ -950,7 +1026,7 @@ app.get("/state", async (c) => {
   ]);
   const own = await myStudents(c),
     visibleStudents = admin
-      ? ss
+      ? ss.filter((st) => rs.some((r) => r.id === st.routeId))
       : a.role === "monitor"
         ? ss.filter((st) => routeIds.has(st.routeId))
         : own,
@@ -1063,7 +1139,12 @@ app.post("/drivers", async (c) => {
   await c
     .get("db")
     .insert(s.drivers)
-    .values({ ...data, id, orgId: c.get("actor").orgId });
+    .values({
+      ...data,
+      userId: data.userId || "driver:" + uuid(),
+      id,
+      orgId: c.get("actor").orgId,
+    });
   await log(c, "driver_created", id);
   return c.json({ id }, 201);
 });
@@ -1089,7 +1170,11 @@ app.put("/drivers/:id", async (c) => {
     )
   )
     fail(409, "Motorista com viagem pendente");
-  await c.get("db").update(s.drivers).set(data).where(eq(s.drivers.id, d.id));
+  await c
+    .get("db")
+    .update(s.drivers)
+    .set({ ...data, userId: data.userId || d.userId || "driver:" + uuid() })
+    .where(eq(s.drivers.id, d.id));
   await log(c, "driver_updated", d.id);
   return c.json({ ok: true });
 });
@@ -1159,6 +1244,67 @@ app.post("/routes", async (c) => {
   ]);
   await log(c, "route_created", id);
   return c.json({ id }, 201);
+});
+app.post("/routes/:id/archive", async (c) => {
+  roles(c, "admin");
+  const r = await routeRef(c, c.req.param("id")),
+    db = c.get("db"),
+    now = Date.now();
+  const running = await db
+    .select({ id: s.trips.id })
+    .from(s.trips)
+    .where(
+      and(
+        eq(s.trips.routeId, r.id),
+        inArray(s.trips.status, ["in_progress", "paused", "interrupted"]),
+      ),
+    );
+  if (running.length && !c.get("actor").demo)
+    fail(409, "Encerre as viagens em operação antes de remover a rota.");
+  await db.batch([
+    db
+      .update(s.routes)
+      .set({ archivedAt: now, active: false, published: false })
+      .where(and(eq(s.routes.id, r.id), eq(s.routes.orgId, r.orgId))),
+    db
+      .update(s.trips)
+      .set({
+        status: "cancelled",
+        endedAt: now,
+        waitUntil: null,
+        waitStopId: null,
+        delayUntil: null,
+        revision: sql`${s.trips.revision}+1`,
+      })
+      .where(
+        and(
+          eq(s.trips.routeId, r.id),
+          inArray(s.trips.status, [
+            "scheduled",
+            "in_progress",
+            "paused",
+            "interrupted",
+          ]),
+        ),
+      ),
+    db
+      .delete(s.journeyPreferences)
+      .where(
+        and(
+          eq(s.journeyPreferences.orgId, r.orgId),
+          eq(s.journeyPreferences.routeId, r.id),
+        ),
+      ),
+    db.insert(s.audit).values({
+      id: uuid(),
+      orgId: r.orgId,
+      actorId: c.get("actor").userId,
+      action: "route_archived",
+      entityId: r.id,
+      createdAt: now,
+    }),
+  ]);
+  return c.json({ ok: true });
 });
 app.put("/routes/:id", async (c) => {
   roles(c, "admin");
@@ -1935,7 +2081,7 @@ app.post("/memberships", async (c) => {
       .object({
         userId: z.string().min(3).max(150),
         name: z.string().min(2).max(100),
-        role: z.enum(["admin", "driver", "student", "guardian", "monitor"]),
+        role: z.enum(activeRoles),
       })
       .strict(),
   );
@@ -1946,35 +2092,9 @@ app.post("/memberships", async (c) => {
   await log(c, "membership_created", p.userId);
   return c.json({ ok: true }, 201);
 });
-app.post("/guardians", async (c) => {
+app.post("/guardians", (c) => {
   roles(c, "admin");
-  const p = await payload(
-      c,
-      z
-        .object({
-          studentId: z.string(),
-          userId: z.string().min(3).max(150),
-          name: z.string().min(2).max(100),
-          verified: z.literal(true),
-        })
-        .strict(),
-    ),
-    db = c.get("db"),
-    a = c.get("actor");
-  const [st] = await db
-    .select()
-    .from(s.students)
-    .where(and(eq(s.students.id, p.studentId), eq(s.students.orgId, a.orgId)));
-  if (!st) fail(404, "Aluno não encontrado");
-  await db.insert(s.guardianLinks).values({
-    id: uuid(),
-    orgId: a.orgId,
-    studentId: p.studentId,
-    userId: p.userId,
-    name: p.name,
-  });
-  await log(c, "guardian_link_verified", p.studentId);
-  return c.json({ ok: true }, 201);
+  fail(410, "Perfil de responsável desativado nesta versão.");
 });
 app.post("/settings", async (c) => {
   roles(c, "admin");

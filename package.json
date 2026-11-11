@@ -19,7 +19,9 @@
     "format": "prettier --write apps packages db tests docs",
     "prebuild": "node scripts/prepare-assets.mjs",
     "predev": "node scripts/prepare-assets.mjs",
-    "db:migrate:local": "node scripts/migrate-local.mjs"
+    "db:migrate:local": "node scripts/migrate-local.mjs",
+    "cloudflare:check": "node scripts/check-cloudflare.mjs",
+    "cloudflare:deploy": "npm run cloudflare:check && npm run build && wrangler deploy --config wrangler.cloudflare.jsonc"
   },
   "dependencies": {
     "@tanstack/react-query": "5.105.3",

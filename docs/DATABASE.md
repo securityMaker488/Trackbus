@@ -1,5 +1,7 @@
 # Banco e migrações
 
+V7: aplicar também `0006_archive_routes.sql`, que adiciona `routes.archived_at` nullable. Rotas arquivadas deixam as consultas operacionais e de alunos, mantendo registros/versões/trips para auditoria. O bootstrap novo não cria rotas, viagens ou estudantes. Os exemplos locais foram arquivados por API após backup; o D1 remoto não foi alterado.
+
 Fonte de verdade: `db/schema.ts`. D1 com Drizzle e consultas parametrizadas. São 25 tabelas, com dados operacionais isolados por org_id.
 
 | Grupo       | Tabelas                                                                      |

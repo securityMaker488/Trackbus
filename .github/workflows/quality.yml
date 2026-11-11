@@ -18,6 +18,7 @@ jobs:
       - run: npm run security
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run build
+      - run: npx wrangler deploy --dry-run --config wrangler.cloudflare.jsonc
       - run: npm ci --prefix apps/driver
       - run: npm run typecheck --prefix apps/driver
       - run: npm audit --prefix apps/driver --audit-level=high

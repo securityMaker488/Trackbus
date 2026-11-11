@@ -1,13 +1,13 @@
 # TrackBus Driver
 
-Aplicativo Expo 58 / React Native 0.88.1, código em apps/driver. Android package `tech.isee.trackbus.driver`, versão 6.1.0, versionCode 7. Interface preta/amarela e logo oficial fornecida pelo proprietário.
+Aplicativo Expo 58 / React Native 0.88.1, código em apps/driver. Android package `tech.isee.trackbus.driver`, versão 7.0.0, versionCode 8. Interface preta/amarela com branco para leitura e logo oficial fornecida pelo proprietário.
 
 ## Instalação e pareamento
 
-Instale o APK arm64 em Android compatível, autorizando instalação somente para o arquivo fornecido. USB opcional: `adb install -r TrackBus-Driver-v6.1-arm64.apk`.
-No painel, Configurações → Sala Smart Journey, prepare circuitos e escolha o motorista para gerar código. No app informe a origem HTTPS da API acessível ao aparelho e o código hexadecimal de 16 caracteres. Código dura 2min, uso único; Bearer dura 8h e fica no SecureStore. Uma URL privada do Sites que exige login no gateway não funciona diretamente no app. Veja DEPLOYMENT.md.
+Instale o APK arm64 em Android compatível, autorizando instalação somente para o arquivo fornecido. USB opcional: `adb install -r TrackBus-Driver-v7-arm64.apk`.
+Crie/publique a rota e programe uma viagem GPS. No painel, Configurações → Conectar o motorista, escolha o motorista e gere o código. No app informe a origem HTTPS da API acessível ao aparelho e o código hexadecimal de 16 caracteres. Código dura 2min, uso único; Bearer dura 8h e fica no SecureStore. Uma URL privada do Sites que exige login no gateway não funciona diretamente no app. Para Cloudflare próprio, veja [configuração](CLOUDFLARE.md).
 
-Selecione viagem GPS atribuída, confirme veículo parado, toque Iniciar viagem e depois Permitir e ativar GPS. Conceda localização em primeiro e segundo plano. Android usa serviço com notificação persistente. Há pausa, retomada, atrasos, ocorrências, espera de 5min, encerramento de espera, viagem/GPS e desconexão.
+Selecione viagem GPS atribuída, confirme veículo parado e toque **Iniciar rota com GPS**. Conceda localização em primeiro e segundo plano e notificações quando solicitadas. Android usa serviço com notificação persistente. Há pausa, retomada, atrasos, ocorrências, espera de 5min, encerramento de espera, viagem/GPS e desconexão. Se a viagem iniciar e a coleta falhar, o app informa essa condição e permite ativar o GPS novamente.
 
 ## GPS
 

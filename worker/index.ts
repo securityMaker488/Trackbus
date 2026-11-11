@@ -1,6 +1,7 @@
 import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
+import { verifyAccessIdentity } from "../apps/api/cloudflare-identity";
 
 const worker = {
   async fetch(
@@ -8,6 +9,38 @@ const worker = {
     env: Cloudflare.Env,
     ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>,
   ) {
+    if (
+      env.AUTH_PROVIDER === "cloudflare-access" &&
+      new URL(request.url).pathname === "/entrar"
+    ) {
+      if (request.method !== "GET")
+        return new Response("Método não permitido", { status: 405 });
+      try {
+        await verifyAccessIdentity(
+          request.headers.get("Cf-Access-Jwt-Assertion") ||
+            request.headers
+              .get("cookie")
+              ?.match(/(?:^|;\s*)CF_Authorization=([^;]+)/)?.[1] ||
+            "",
+          env,
+        );
+      } catch {
+        return new Response(
+          "Acesso não autorizado. Entre pela aplicação Cloudflare Access configurada para /entrar.",
+          { status: 401, headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      const headers = new Headers({
+        Location: "/",
+        "Cache-Control": "no-store",
+      });
+      for (const cookie of ["tb_visitor", "tb_demo"])
+        headers.append(
+          "Set-Cookie",
+          `${cookie}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Strict`,
+        );
+      return new Response(null, { status: 303, headers });
+    }
     let binding = ctx.props?.CONNECTORS;
     // Local preview emulates the same request-scoped capability. This branch and
     // the auxiliary service binding are absent from production builds.

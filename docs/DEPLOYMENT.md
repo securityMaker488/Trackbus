@@ -1,6 +1,6 @@
 # Execução e implantação
 
-Esta etapa V6 é local. Não foi executado push nem publicação. A configuração .openai/hosting.json e o Site existente foram preservados. O banco local é separado do D1 hospedado.
+Esta etapa V7 é local. Não foi executado push nem publicação. Para hospedar diretamente na Cloudflare com autenticação Access, use [o guia V7](CLOUDFLARE.md). A configuração .openai/hosting.json e o Site existente foram preservados. O banco local é separado do D1 hospedado.
 
 ## Local
 
@@ -13,7 +13,7 @@ npm run db:migrate:local
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Abrir http://127.0.0.1:5173. Login simulado existe somente no ambiente de desenvolvimento. Abrir demonstração chama /api/bootstrap; não há seed automático em GET. Configurações → Preparar circuitos da Congretech. Participantes usam /#/participar em outro contexto de navegador.
+Abrir http://127.0.0.1:5173. Login simulado existe somente no ambiente de desenvolvimento. Configurar apresentação chama /api/bootstrap e prepara uma escola sem rotas; não há seed automático em GET. Crie/publique a rota, programe a viagem e conecte os celulares em Configurações. Participantes usam /#/participar em outro contexto de navegador.
 
 `npm start` serve o Worker compilado via Wrangler local; não existe npm run preview. A configuração gerada está em dist/server/wrangler.json. Bundle do Worker em dist/server/index.js, cliente em dist/client.
 
@@ -23,7 +23,7 @@ Fluxo suportado do projeto: compilar/testar, enviar exatamente o commit autoriza
 
 DB é binding obrigatório. VALHALLA_URL é opcional, HTTPS fixo de provedor institucional; não há servidor público de roteamento embutido. VAPID_PUBLIC_KEY, VAPID_PRIVATE_JWK e VAPID_SUBJECT habilitam push; chave privada como Secret. Nunca colocar valores privados em .openai/hosting.json, app Android ou Git.
 
-Migrações 0000..0005 precisam acompanhar a versão. Nunca aplicar alterações remotas por suposição. No ambiente Cloudflare próprio, depois de criar/configurar o D1 e a fronteira de identidade:
+Migrações 0000..0006 precisam acompanhar a versão. Nunca aplicar alterações remotas por suposição. No ambiente Cloudflare próprio, depois de criar/configurar o D1 e a fronteira de identidade:
 
 ```sh
 npx wrangler d1 migrations apply DB --remote --config <configuração-aprovada>

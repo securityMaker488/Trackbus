@@ -1,10 +1,12 @@
 # API HTTP
 
-Contratos revisados contra `apps/api/index.ts` e `packages/validation/index.ts` em 9/11/2026. Prefixo `/api`. Respostas JSON; erros retornam `error` e identificador de requisição. `GET /health` retorna serviço/status, sem verificar disponibilidade real do D1.
+Contratos revisados contra `apps/api/index.ts` e `packages/validation/index.ts`; atualização V7 em 11/11/2026. Prefixo `/api`. Respostas JSON; erros retornam `error` e identificador de requisição. `GET /health` retorna serviço/status, sem verificar disponibilidade real do D1.
+
+V7: `GET /auth/config` informa o caminho de login conforme o provedor. `POST /routes/:id/archive` é exclusivo do admin, arquiva a rota da instituição, cancela viagens abertas em demonstração e retira favoritos; preserva histórico. Fora de demo, viagens em operação impedem arquivamento. `POST /guardians` responde 410 ao admin; perfis guardian/monitor são rejeitados no middleware. Bootstrap cria apenas escola, admin, veículo e motorista fictícios, sem rotas. O modo Cloudflare exige JWT Access e e-mail autorizado para bootstrap; detalhes em [Cloudflare](CLOUDFLARE.md).
 
 ## Autorização
 
-Identidade institucional vem do gateway Sites em `oai-authenticated-user-id`, com membership ativo no D1. Não enviar esse header de um cliente como mecanismo de login. Visitante usa `tb_visitor`, HttpOnly, SameSite=Strict, Secure em HTTPS, 4h. Android usa Bearer de dispositivo por 8h. Browser exige Origin exato e Content-Type JSON nas escritas. Native sem Origin exige Bearer ou troca de pareamento. Limites e autorização continuam no backend.
+Identidade institucional vem de JWT Cloudflare Access verificado no modo próprio, ou do gateway Sites em `oai-authenticated-user-id` no modo Sites, com membership ativo no D1. Não enviar esse header de um cliente como mecanismo de login. Visitante usa `tb_visitor`, HttpOnly, SameSite=Strict, Secure em HTTPS, 4h. Android usa Bearer de dispositivo por 8h. Browser exige Origin exato e Content-Type JSON nas escritas. Native sem Origin exige Bearer ou troca de pareamento. Limites e autorização continuam no backend.
 
 | Método     | Caminho                                                       | Contrato / escopo                                                                                                   |
 | ---------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |

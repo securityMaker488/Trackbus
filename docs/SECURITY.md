@@ -2,8 +2,8 @@
 Controles revisados no código; resultados de testes em TESTING.md. Modelo de ameaças preservado em security/THREATS.md. Não há alegação de segurança absoluta ou auditoria externa concluída.
 
 ## Fronteira de identidade
-A aplicação foi construída para gateway Sites. Header `oai-authenticated-user-id` só é confiável quando injetado e protegido por esse gateway; membership ativa determina papel e organização. O backend não implementa senha local, recuperação nem MFA próprio.
-**Não publicar o Worker principal diretamente na internet confiando em headers enviados pelo navegador.** Um deploy Cloudflare independente precisa de integração autenticada verificável, por exemplo JWT do Cloudflare Access com issuer/audience/assinatura validados. Essa integração não está implementada.
+A aplicação mantém dois modos explícitos. No gateway Sites, `oai-authenticated-user-id` só é confiável quando injetado e protegido pelo gateway; membership ativa determina papel e organização. No Cloudflare próprio, `AUTH_PROVIDER=cloudflare-access` exige JWT RS256 verificado com issuer, audience, validade e identidade humana, e ignora o header Sites. O primeiro administrador precisa do e-mail verificado configurado. O backend não implementa senha local, recuperação nem MFA próprio; estes pertencem ao provedor de identidade.
+**Não exponha o modo Sites como Worker público independente.** Use a [configuração Cloudflare V7](CLOUDFLARE.md). A integração JWT tem testes locais, mas configuração Access/deploy real ainda não foram validados na conta. Apenas admin, driver e student são papéis ativos; vínculos antigos de guardian/monitor recebem acesso negado.
 
 Visitante fictício: token aleatório de 32 bytes, hash SHA256 no D1, cookie HttpOnly/Strict/Secure em HTTPS, 4h; escola demo aberta e allowlist restrita. Nome nunca promove papel. Troca de perfil demo pertence ao proprietário autenticado. Android: código 16 hex/2min de uso único, token 32bytes/8h; driver ativo e viagem atribuída revalidados. Certificado Android não contém segredo do servidor.
 

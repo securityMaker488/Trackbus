@@ -1,0 +1,51 @@
+{
+  "date": "2026-11-11",
+  "scope": "local, sem push ou deploy",
+  "unitIntegration": { "passed": 65, "files": 9, "runner": "Vitest" },
+  "e2e": {
+    "passed": 6,
+    "runner": "Playwright / Edge",
+    "gps": "controlado pelo teste; não é GPS físico",
+    "tiles": "bloqueados nos E2E"
+  },
+  "webTypecheck": "pass",
+  "driverTypecheck": "pass",
+  "eslint": "pass",
+  "securityScannerFindings": [],
+  "npmAudit": { "web": 0, "driver": 0 },
+  "webBuild": "pass",
+  "cloudflareDryRun": "pass, sem publicação",
+  "cloudflareConfigurationCheck": "bloqueio esperado: D1, team domain, audience e e-mail inicial ainda não configurados",
+  "cloudflareProductionLocal": "HTML e assets 200; identidade forjada 401; entrada do aluno e gestão 403 verificadas no navegador",
+  "localDatabase": {
+    "migration": "0006_archive_routes",
+    "exampleRoutesArchived": 12,
+    "visibleRoutesAfterTestCleanup": 0,
+    "backup": "work/pre-v7-demo.sql"
+  },
+  "android": {
+    "file": "TrackBus-Driver-v7-arm64.apk",
+    "version": "7.0.0",
+    "versionCode": 8,
+    "bytes": 24114096,
+    "abi": "arm64-v8a",
+    "minSdk": 24,
+    "targetSdk": 36,
+    "compileSdk": 37,
+    "gradle": "BUILD SUCCESSFUL, assembleRelease",
+    "signature": "apksigner verify passou; certificado de demonstração",
+    "sha256": "E1DA3EBDC35B2F3AA34E28DD61603600EEE3AF1A65D9BFD9268EF539A19DB80D",
+    "stagingSourceComparison": "App.tsx, tracking.ts, app.json, package.json e package-lock.json idênticos",
+    "attachedDevices": 0,
+    "physicalBackgroundGps": "pendente"
+  },
+  "pending": [
+    "Configuração real D1/Access/domínio",
+    "Deploy autorizado",
+    "Instalação Android e ensaio entre celulares",
+    "GPS nativo com tela bloqueada",
+    "Build iOS",
+    "VAPID se push for necessário",
+    "Instalação PWA em navegador HTTPS compatível"
+  ]
+}

@@ -124,17 +124,7 @@ export async function unpair() {
     await SecureStore.deleteItemAsync(SESSION);
   }
 }
-export async function startTracking(tripId: string) {
-  const list = await request<Trip[]>("/driver/trips");
-  if (
-    !list.some(
-      (t) =>
-        t.id === tripId &&
-        t.status === "in_progress" &&
-        t.trackingMode !== "simulation",
-    )
-  )
-    throw Error("Inicie uma viagem atribuída com GPS real.");
+export async function ensureGpsPermissions() {
   if (!(await Location.hasServicesEnabledAsync()))
     throw Error("Ative a localização do aparelho.");
   const fg = await Location.requestForegroundPermissionsAsync();
@@ -146,6 +136,19 @@ export async function startTracking(tripId: string) {
     await PermissionsAndroid.request(
       PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
     );
+}
+export async function startTracking(tripId: string) {
+  const list = await request<Trip[]>("/driver/trips");
+  if (
+    !list.some(
+      (t) =>
+        t.id === tripId &&
+        t.status === "in_progress" &&
+        t.trackingMode !== "simulation",
+    )
+  )
+    throw Error("Inicie uma viagem atribuída com GPS real.");
+  await ensureGpsPermissions();
   await stopTracking();
   await SecureStore.setItemAsync(
     ACTIVE,

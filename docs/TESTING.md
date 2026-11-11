@@ -1,4 +1,8 @@
-# Testes e evidências V6
+# Testes e evidências
+
+V7, 11/11/2026: **65 testes unitários/integração em 9 arquivos e 6 E2E aprovados**. Typecheck web e Driver, lint, scanner e build passaram; npm audit web/Driver sem vulnerabilidades reportadas. APK 7.0.0/code8 compilado e assinado. Layout e orientação PWA verificados em 1366×900 e 390×844. Modelo Cloudflare passou no dry-run e no smoke local do Worker compilado; recusou identidade forjada e entregou os recursos estáticos após correção do roteamento. Evidências em `docs/evidence/v7-*.json`. Ensaios reais Access, instalação PWA e Android/tela bloqueada permanecem pendentes. Os testes do navegador usam geolocalização controlada, não GPS físico.
+
+## Histórico V6
 
 Resultado em 10/11/2026: 57 testes unitários/integração em7 arquivos e 5 E2E aprovados; typecheck, lint, scanner, auditoria npm e build concluídos. APK6.1.0/code7 assinado verificado. A verificação visual adicional V6.1 carregou30 tiles HTTP200, com a logo oficial e progresso visível em simulação. Ensaio físico Android continua pendente. A auditoria inicial passou 42 testes em 5 arquivos. Foram encontrados erros na documentação anterior: contagens por suíte, endpoints Android e testes de hardware não correspondiam ao código; corrigidos nesta etapa.
 

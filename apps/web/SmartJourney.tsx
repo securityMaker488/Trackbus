@@ -18,6 +18,7 @@ import type { Point } from "../../packages/domain";
 import { departure } from "../../packages/domain";
 import { api } from "./http";
 import { PushChoice } from "./PushChoice";
+import { InstallApp } from "./InstallApp";
 type Journey = Awaited<ReturnType<typeof journeyState>> & {
   pushKey?: string | null;
 };
@@ -323,156 +324,178 @@ export function SmartJourney({
           </button>
         )}
       </header>
-      <details
-        ref={picker}
-        className="panel journey-panel"
-        open={!selected || undefined}
-      >
-        <summary>
-          <Navigation size={17} />{" "}
-          {selected
-            ? `Escolha de rota · ${storedRoute?.name || "Atualizar"}`
-            : "Escolha sua rota e parada"}
-        </summary>
-        <div className="journey-fields">
-          <label>
-            Buscar rota
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Nome da rota"
-            />
-          </label>
-          <label>
-            Turno
-            <select value={shift} onChange={(e) => setShift(e.target.value)}>
-              <option value="">Todos</option>
-              {Array.from(new Set(d.routes.map((r) => r.shift))).map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Rota da escola
-            <select
-              value={routeId}
-              onChange={(e) => {
-                const r = d.routes.find((r) => r.id === e.target.value),
-                  saved = d.preferences.find((p) => p.routeId === r?.id);
-                setRoute(e.target.value);
-                setStop(saved?.stopId || r?.stops[0]?.id || "");
-                setFavorite(saved?.favorite || false);
-                setNotify(saved?.notify ?? true);
-              }}
-            >
-              <option value="">Selecionar rota</option>
-              {visible.map((r) => (
-                <option value={r.id} key={r.id}>
-                  {r.name} · {r.shift}
-                  {d.preferences.some((p) => p.favorite && p.routeId === r.id)
-                    ? " ★"
-                    : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Parada de embarque
-            <select value={stopId} onChange={(e) => setStop(e.target.value)}>
-              <option value="">Selecionar parada</option>
-              {draft?.stops.map((s, i) => (
-                <option value={s.id} key={s.id}>
-                  {i + 1}. {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="journey-route-cards" aria-label="Rotas disponíveis">
-          {visible.map((r) => {
-            const trip = d.trips.find(
-              (t) =>
-                t.routeId === r.id &&
-                !["completed", "cancelled"].includes(t.status),
-            );
-            return (
-              <button
-                key={r.id}
-                className={
-                  "journey-route-card" + (routeId === r.id ? " selected" : "")
-                }
-                aria-pressed={routeId === r.id}
-                onClick={() => {
-                  const saved = d.preferences.find((p) => p.routeId === r.id);
-                  setRoute(r.id);
-                  setStop(saved?.stopId || r.stops[0]?.id || "");
+      <InstallApp />
+      {!d.routes.length && (
+        <section className="panel first-route">
+          <BusFront size={38} />
+          <h2>Estamos preparando as rotas.</h2>
+          <p>
+            Assim que a gestão publicar um trajeto, ele aparecerá aqui para você
+            escolher.
+          </p>
+          <button className="button secondary" onClick={() => query.refetch()}>
+            Atualizar rotas
+          </button>
+        </section>
+      )}
+      {d.routes.length > 0 && (
+        <details
+          ref={picker}
+          className="panel journey-panel"
+          open={!selected || undefined}
+        >
+          <summary>
+            <Navigation size={17} />{" "}
+            {selected
+              ? `Escolha de rota · ${storedRoute?.name || "Atualizar"}`
+              : "Escolha sua rota e parada"}
+          </summary>
+          <div className="journey-fields">
+            <label>
+              Buscar rota
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Nome da rota"
+              />
+            </label>
+            <label>
+              Turno
+              <select value={shift} onChange={(e) => setShift(e.target.value)}>
+                <option value="">Todos</option>
+                {Array.from(new Set(d.routes.map((r) => r.shift))).map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Rota da escola
+              <select
+                value={routeId}
+                onChange={(e) => {
+                  const r = d.routes.find((r) => r.id === e.target.value),
+                    saved = d.preferences.find((p) => p.routeId === r?.id);
+                  setRoute(e.target.value);
+                  setStop(saved?.stopId || r?.stops[0]?.id || "");
                   setFavorite(saved?.favorite || false);
                   setNotify(saved?.notify ?? true);
                 }}
               >
-                <span>
-                  <strong>
-                    {routeId === r.id ? "✓ " : ""}
-                    {r.name}
-                  </strong>
-                  <small>
-                    {r.departureTime || r.shift} ·{" "}
-                    {trip ? descriptions[trip.status] : "Sem viagem programada"}
-                  </small>
-                </span>
-                <Star
-                  size={19}
-                  fill={
-                    d.preferences.some((p) => p.routeId === r.id && p.favorite)
-                      ? "currentColor"
-                      : "none"
+                <option value="">Selecionar rota</option>
+                {visible.map((r) => (
+                  <option value={r.id} key={r.id}>
+                    {r.name} · {r.shift}
+                    {d.preferences.some((p) => p.favorite && p.routeId === r.id)
+                      ? " ★"
+                      : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Parada de embarque
+              <select value={stopId} onChange={(e) => setStop(e.target.value)}>
+                <option value="">Selecionar parada</option>
+                {draft?.stops.map((s, i) => (
+                  <option value={s.id} key={s.id}>
+                    {i + 1}. {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="journey-route-cards" aria-label="Rotas disponíveis">
+            {visible.map((r) => {
+              const trip = d.trips.find(
+                (t) =>
+                  t.routeId === r.id &&
+                  !["completed", "cancelled"].includes(t.status),
+              );
+              return (
+                <button
+                  key={r.id}
+                  className={
+                    "journey-route-card" + (routeId === r.id ? " selected" : "")
                   }
-                />
-              </button>
-            );
-          })}
-          {!visible.length && <p>Nenhuma rota encontrada para este filtro.</p>}
-        </div>
-        {draft && (
-          <p>
-            {draft.description} · Horários:{" "}
-            {d.trips
-              .filter((t) => t.routeId === draft.id)
-              .slice(0, 4)
-              .map((t) => clock(t.plannedStart))
-              .join(" / ") || "Sem viagens programadas"}
-          </p>
-        )}
-        <div className="journey-actions">
-          <label>
-            <input
-              type="checkbox"
-              checked={favorite}
-              onChange={(e) => setFavorite(e.target.checked)}
-            />{" "}
-            <Star size={15} /> Favoritar rota e parada
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={notify}
-              onChange={(e) => setNotify(e.target.checked)}
-            />{" "}
-            <Bell size={15} /> Alertas nesta tela
-          </label>
-          <button
-            className="button primary"
-            disabled={busy || !routeId || !stopId}
-            onClick={choose}
-          >
-            Salvar escolha
-          </button>
-        </div>
-        <small>
-          A escolha serve para acompanhamento. A escola confirma a vaga e o
-          embarque.
-        </small>
-      </details>
+                  aria-pressed={routeId === r.id}
+                  onClick={() => {
+                    const saved = d.preferences.find((p) => p.routeId === r.id);
+                    setRoute(r.id);
+                    setStop(saved?.stopId || r.stops[0]?.id || "");
+                    setFavorite(saved?.favorite || false);
+                    setNotify(saved?.notify ?? true);
+                  }}
+                >
+                  <span>
+                    <strong>
+                      {routeId === r.id ? "✓ " : ""}
+                      {r.name}
+                    </strong>
+                    <small>
+                      {r.departureTime || r.shift} ·{" "}
+                      {trip
+                        ? descriptions[trip.status]
+                        : "Sem viagem programada"}
+                    </small>
+                  </span>
+                  <Star
+                    size={19}
+                    fill={
+                      d.preferences.some(
+                        (p) => p.routeId === r.id && p.favorite,
+                      )
+                        ? "currentColor"
+                        : "none"
+                    }
+                  />
+                </button>
+              );
+            })}
+            {!visible.length && (
+              <p>Nenhuma rota encontrada para este filtro.</p>
+            )}
+          </div>
+          {draft && (
+            <p>
+              {draft.description} · Horários:{" "}
+              {d.trips
+                .filter((t) => t.routeId === draft.id)
+                .slice(0, 4)
+                .map((t) => clock(t.plannedStart))
+                .join(" / ") || "Sem viagens programadas"}
+            </p>
+          )}
+          <div className="journey-actions">
+            <label>
+              <input
+                type="checkbox"
+                checked={favorite}
+                onChange={(e) => setFavorite(e.target.checked)}
+              />{" "}
+              <Star size={15} /> Favoritar rota e parada
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={notify}
+                onChange={(e) => setNotify(e.target.checked)}
+              />{" "}
+              <Bell size={15} /> Alertas nesta tela
+            </label>
+            <button
+              className="button primary"
+              disabled={busy || !routeId || !stopId}
+              onClick={choose}
+            >
+              Salvar escolha
+            </button>
+          </div>
+          <small>
+            A escolha serve para acompanhamento. A escola confirma a vaga e o
+            embarque.
+          </small>
+        </details>
+      )}
       {selected && storedRoute && (
         <>
           <div className="journey-grid">

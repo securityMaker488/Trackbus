@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { visibleProgress } from "../../packages/domain/tracking";
 import { HTTPException } from "hono/http-exception";
 import * as s from "../../db/schema";
@@ -22,6 +22,7 @@ export async function schoolRoutes(db: DB, orgId: string) {
         eq(s.routes.orgId, orgId),
         eq(s.routes.published, true),
         eq(s.routes.active, true),
+        isNull(s.routes.archivedAt),
       ),
     )
     .limit(500);

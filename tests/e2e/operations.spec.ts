@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+const createdRoutes: string[] = [];
 async function login(page: Page) {
   await page.route("https://tile.openstreetmap.org/**", (route) =>
     route.abort(),
@@ -6,13 +7,15 @@ async function login(page: Page) {
   await page.goto("/signin-with-chatgpt?return_to=/");
   await expect(
     page
-      .getByRole("button", { name: "Abrir demonstração" })
+      .getByRole("button", { name: "Configurar apresentação" })
       .or(page.getByRole("heading", { name: "Sua operação, em movimento." })),
   ).toBeVisible();
   if (
-    await page.getByRole("button", { name: "Abrir demonstração" }).isVisible()
+    await page
+      .getByRole("button", { name: "Configurar apresentação" })
+      .isVisible()
   )
-    await page.getByRole("button", { name: "Abrir demonstração" }).click();
+    await page.getByRole("button", { name: "Configurar apresentação" }).click();
   await expect(
     page.getByRole("heading", { name: "Sua operação, em movimento." }),
   ).toBeVisible();
@@ -24,22 +27,105 @@ test.beforeAll(async ({ browser }) => {
     await login(page);
     const state = await (await page.request.get("/api/state")).json();
     const headers = { Origin: "http://127.0.0.1:5173" };
-    for (const route of state.routes.filter((r: { name: string }) =>
-      r.name.includes("Rota 01"),
-    ))
-      expect(
-        (
-          await page.request.post(`/api/routes/${route.id}/visibility`, {
-            headers,
-            data: { published: true },
-          })
-        ).status(),
-      ).toBe(200);
-    expect(
-      (
-        await page.request.post("/api/journey/prepare", { headers, data: {} })
-      ).status(),
-    ).toBe(200);
+    async function post(path: string, data: unknown) {
+      const r = await page.request.post("/api" + path, { headers, data });
+      expect(r.status(), await r.text()).toBeLessThan(300);
+      return r.json();
+    }
+    const vehicle = state.vehicles.find(
+      (v: { name: string }) => v.name === "Horizonte 01",
+    ) || {
+      id: (
+        await post("/vehicles", {
+          name: "Horizonte 01",
+          plate: "E2E0A01".replace("E2E", "EET"),
+          model: "Teste",
+          year: 2026,
+          capacity: 44,
+          status: "available",
+        })
+      ).id,
+    };
+    const gpsVehicle = state.vehicles.find(
+      (v: { id: string }) =>
+        v.id !== vehicle.id &&
+        state.vehicles.find(
+          (x: { id: string; status: string }) => x.id === v.id,
+        )?.status === "available",
+    ) || {
+      id: (
+        await post("/vehicles", {
+          name: "GPS de teste",
+          plate: "EET0A02",
+          model: "Teste",
+          year: 2026,
+          capacity: 44,
+          status: "available",
+        })
+      ).id,
+    };
+    const gpsDriver =
+      state.drivers.find(
+        (d: { userId: string }) =>
+          d.userId === state.organization.id + ":driver-user-0",
+      ) || state.drivers[0];
+    const simDriver = state.drivers.find(
+      (d: { id: string; status: string }) =>
+        d.id !== gpsDriver.id && d.status === "active",
+    ) || {
+      id: (await post("/drivers", { name: "Motorista E2E", status: "active" }))
+        .id,
+    };
+    const stops = [
+      {
+        id: "a",
+        name: "Origem no Açude",
+        lat: -7.2227228,
+        lng: -35.8774256,
+        dwellSeconds: 30,
+      },
+      {
+        id: "b",
+        name: "Parada intermediária",
+        lat: -7.2249866,
+        lng: -35.8807931,
+        dwellSeconds: 30,
+      },
+      {
+        id: "c",
+        name: "Destino no Açude",
+        lat: -7.2257942,
+        lng: -35.8845174,
+        dwellSeconds: 30,
+      },
+    ];
+    for (const mode of ["simulation", "gps"]) {
+      const name =
+        mode === "simulation"
+          ? "Rota 01 · Açude Velho"
+          : "Circuito Congretech · Campina Grande · GPS real";
+      const route = await post("/routes", {
+        name,
+        shift: "Manhã",
+        departureTime: "07:00",
+        stops,
+      });
+      createdRoutes.push(route.id);
+      await post(`/routes/${route.id}/visibility`, { published: true });
+      const trip = await post("/trips", {
+        name: mode === "simulation" ? "Ida · Rota 01 · E2E" : "Viagem GPS E2E",
+        routeId: route.id,
+        vehicleId: mode === "simulation" ? vehicle.id : gpsVehicle.id,
+        driverId: mode === "simulation" ? simDriver.id : gpsDriver.id,
+        plannedStart: Date.now(),
+        plannedEnd: Date.now() + 3600000,
+        trackingMode: mode,
+      });
+      if (mode === "simulation") {
+        await post(`/trips/${trip.id}/status`, { status: "in_progress" });
+        await post(`/trips/${trip.id}/simulate`, { speed: 7 });
+      }
+    }
   } finally {
     await ctx.close();
   }
@@ -83,7 +169,7 @@ test("cadastro persiste após recarregar; mapa, editor e páginas abrem", async 
     "Central de avisos",
     "Ocorrências",
     "Motoristas",
-    "Alunos e responsáveis",
+    "Alunos",
     "Embarques",
     "Calendário",
     "Manutenção",
@@ -92,7 +178,10 @@ test("cadastro persiste após recarregar; mapa, editor e páginas abrem", async 
     "Auditoria",
     "Configurações",
   ]) {
-    await page.getByRole("link", { name: new RegExp("^" + label) }).click();
+    const link = page.getByRole("link", { name: new RegExp("^" + label) });
+    if (!(await link.isVisible()))
+      await page.locator(".more-tools summary").click();
+    await link.click();
     await expect(
       page.getByRole("heading", { name: label, exact: true }),
     ).toBeVisible();
@@ -334,6 +423,7 @@ test("nova rota por cliques persiste no D1 e aparece em sessão independente do 
     ).toBeVisible();
     const after = await (await admin.request.get("/api/state")).json(),
       route = after.routes.find((r: { name: string }) => r.name === name);
+    createdRoutes.push(route.id);
     expect(route.stops[0].name).toBe("Origem Campina");
     expect(route.stops[0].lat).toBe(lat);
     await student.route("https://tile.openstreetmap.org/**", (r) => r.abort());
@@ -400,4 +490,63 @@ test("mobile sem transbordamento, navegação e acessibilidade básica", async (
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("três perfis e início de rota no navegador com GPS controlado de teste", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:5173",
+    viewport: { width: 390, height: 844 },
+    geolocation: { latitude: -7.2227228, longitude: -35.8774256, accuracy: 5 },
+    permissions: ["geolocation"],
+  });
+  try {
+    const page = await context.newPage();
+    await login(page);
+    expect(
+      await page
+        .getByLabel("Perfil de demonstração")
+        .locator("option")
+        .evaluateAll((options) =>
+          options.map((o) => (o as HTMLOptionElement).value),
+        ),
+    ).toEqual(["admin", "driver", "student"]);
+    await page.getByLabel("Perfil de demonstração").selectOption("driver");
+    await page.getByRole("button", { name: /Abrir minha viagem/ }).click();
+    await page.getByLabel("O veículo está parado em local seguro.").check();
+    await page
+      .getByRole("button", { name: "Iniciar rota com GPS", exact: true })
+      .click();
+    await expect
+      .poll(async () => {
+        const s = await (await page.request.get("/api/state")).json();
+        return s.locations.find(
+          (l: { position: { source: string } }) => l.position.source === "gps",
+        )?.position.lat;
+      })
+      .toBe(-7.2227228);
+    await expect(page.getByText("GPS ativo", { exact: true })).toBeVisible();
+    await page.screenshot({ path: "work/v7-driver-web.png", fullPage: true });
+  } finally {
+    await context.close();
+  }
+});
+test.afterAll(async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:5173",
+  });
+  try {
+    const page = await context.newPage();
+    await login(page);
+    for (const id of createdRoutes) {
+      const response = await page.request.post(`/api/routes/${id}/archive`, {
+        headers: { Origin: "http://127.0.0.1:5173" },
+        data: {},
+      });
+      expect(response.status()).toBe(200);
+    }
+  } finally {
+    await context.close();
+  }
 });

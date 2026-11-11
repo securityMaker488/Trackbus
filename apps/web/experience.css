@@ -1,0 +1,301 @@
+.install-app {
+  margin: 18px 0;
+  max-width: 460px;
+  color: #b8b8b8;
+  font-size: 12px;
+}
+.install-app summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: #facc15;
+  min-height: 40px;
+}
+.install-app p {
+  line-height: 1.7;
+  margin: 8px 0;
+}
+.install-app small {
+  display: block;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.more-tools {
+  margin: 18px 0 4px;
+  border-top: 1px solid #282828;
+  padding-top: 12px;
+}
+.more-tools summary {
+  color: #aaa;
+  cursor: pointer;
+  padding: 12px 10px;
+  font-size: 12px;
+}
+.more-tools[open] summary {
+  color: #f5f5f5;
+}
+.operation-guide {
+  margin-bottom: 28px;
+  padding: 28px;
+  border: 1px solid #303030;
+  border-radius: 18px;
+  background: linear-gradient(125deg, #202020, #141414 65%);
+}
+.operation-guide h2 {
+  font-size: clamp(23px, 2.5vw, 32px);
+  letter-spacing: -0.8px;
+  margin: 10px 0;
+  color: #fff;
+}
+.operation-guide p,
+.setup-steps small,
+.first-route p {
+  color: #b8b8b8;
+  line-height: 1.6;
+}
+.setup-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+.setup-steps button {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  text-align: left;
+  border: 1px solid #383838;
+  border-radius: 12px;
+  padding: 18px;
+  background: #141414;
+  color: #f5f5f5;
+  min-height: 137px;
+}
+.setup-steps button:hover:not(:disabled) {
+  border-color: #facc15;
+  background: #202020;
+}
+.setup-steps button > span {
+  color: #facc15;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.setup-steps strong {
+  font-size: 15px;
+  font-weight: 650;
+}
+.setup-steps svg {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  color: #facc15;
+}
+.first-route {
+  padding: 56px 24px;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 17px;
+  margin: 18px 0;
+}
+.first-route > svg {
+  color: #facc15;
+}
+.first-route h2 {
+  font-size: 25px;
+  letter-spacing: -0.6px;
+}
+.first-route p {
+  max-width: 450px;
+}
+.page-heading h1 {
+  letter-spacing: -1.2px;
+}
+.panel {
+  border-color: #282828;
+}
+.button {
+  min-height: 42px;
+}
+.button.primary {
+  font-weight: 700;
+}
+.sidebar .nav-item {
+  font-size: 13px;
+}
+.nav-section {
+  color: #909090;
+}
+.journey-shell {
+  color: #f5f5f5;
+}
+.journey-panel small {
+  color: #b8b8b8;
+}
+.journey-entry input::placeholder {
+  color: #909090;
+}
+.journey-header > div {
+  position: relative;
+  padding-left: 98px;
+  min-height: 88px;
+}
+.journey-header .trackbus-logo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 82px;
+  height: 82px;
+}
+.journey-header h1 {
+  margin: 7px 0;
+  font-size: clamp(26px, 3.5vw, 42px);
+}
+.journey-header p {
+  color: #b8b8b8;
+  line-height: 1.5;
+}
+.journey-header .eyebrow {
+  color: #facc15;
+}
+.connection-card h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.connection-card h2 svg {
+  color: #facc15;
+}
+.connection-card hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid #303030;
+  margin: 12px 0;
+}
+.copy-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.copy-link input {
+  min-width: 0;
+  flex: 1;
+}
+.pair-code {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px dashed #facc15;
+  border-radius: 10px;
+  text-align: center;
+}
+.pair-code strong {
+  color: #facc15;
+  letter-spacing: 2px;
+  font:
+    700 22px ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+.pair-code span {
+  font-size: 12px;
+  color: #b8b8b8;
+}
+.connection-card details {
+  padding-top: 16px;
+  border-top: 1px solid #303030;
+}
+.connection-card summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: #b8b8b8;
+  margin-bottom: 12px;
+}
+.driver-start-card {
+  margin-bottom: 20px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-left: 3px solid #facc15;
+}
+.driver-start-card h2 {
+  font-size: 22px;
+  margin: 8px 0;
+}
+.driver-start-card p {
+  color: #b8b8b8;
+  line-height: 1.5;
+}
+@media (max-width: 760px) {
+  .welcome {
+    padding: 24px 24px 72px;
+  }
+  .welcome .brand {
+    margin-bottom: 24px;
+  }
+  .welcome h1 {
+    font-size: 42px;
+    letter-spacing: -1.8px;
+    margin-top: 18px;
+  }
+  .welcome-copy > p {
+    margin: 18px 0;
+    line-height: 1.65;
+  }
+  .welcome .button,
+  .journey-shell .button {
+    min-height: 44px;
+  }
+  .welcome input,
+  .welcome select {
+    min-height: 44px;
+  }
+  .operation-guide {
+    padding: 20px;
+  }
+  .setup-steps {
+    grid-template-columns: 1fr;
+  }
+  .setup-steps button {
+    min-height: 100px;
+    padding-left: 55px;
+  }
+  .setup-steps button > span {
+    position: absolute;
+    left: 17px;
+    top: 22px;
+  }
+  .setup-steps svg {
+    top: 22px;
+  }
+  .journey-header {
+    gap: 14px;
+  }
+  .journey-header > div {
+    padding-left: 80px;
+  }
+  .journey-header .trackbus-logo {
+    width: 66px;
+    height: 66px;
+  }
+  .journey-header h1 {
+    font-size: 27px;
+  }
+  .journey-header .eyebrow {
+    font-size: 9px;
+  }
+  .driver-start-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .first-route {
+    padding: 35px 18px;
+  }
+  .first-route h2 {
+    font-size: 22px;
+  }
+}

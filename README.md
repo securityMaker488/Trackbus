@@ -4,15 +4,15 @@
 
 Plataforma de transporte escolar da **I.See Technologies**, preparada para demonstração técnica na **FECT e Congretech, em Campina Grande/PB**. Gestão cria rotas no mapa; alunos da mesma escola escolhem rota e parada; Smart Journey combina posição do ônibus, caminhada, estimativas e avisos.
 
-Esta atualização preserva o projeto e o histórico anteriores. A etapa V6.1 foi feita localmente, sem push ou publicação. Estado de verificação e pendências em [relatório V6](docs/V6-ENTREGA.md).
+Esta atualização preserva o projeto e o histórico anteriores. A etapa V7 foi feita localmente, sem push ou publicação. Estado de verificação e pendências em [relatório V7](docs/V7-ENTREGA.md). Há somente três perfis ativos: aluno, motorista e administrador. A apresentação começa sem rotas, para criação ao vivo.
 
 ## Interface
 
-Identidade preta/amarela no web, PWA e Driver. Logo oficial fornecida pelo proprietário em 10/11/2026 integrada sem redesenho; arquivo original preservado.
+Identidade preta/amarela com branco e cinzas neutros para leitura no web, PWA e Driver. Logo oficial fornecida pelo proprietário em 10/11/2026 integrada ao fundo sem redesenho; arquivo original preservado.
 
 | Gestão                                       | Editor por clique                              | Aluno                                                |
 | -------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------- |
-| ![Painel real](docs/screenshots/desktop.png) | ![Editor real](docs/screenshots/editor-v6.png) | ![Seleção de rotas](docs/screenshots/student-v6.png) |
+| ![Painel real](docs/screenshots/admin-v7.png) | ![Editor real](docs/screenshots/editor-v6.png) | ![Entrada](docs/screenshots/entrada-mobile-v7.png) |
 
 Capturas de testes reais da aplicação local. Os E2E bloqueiam tiles externos deliberadamente; a ausência de ruas nessas capturas não é uma imagem de cartografia fictícia.
 
@@ -24,8 +24,8 @@ Capturas de testes reais da aplicação local. Os E2E bloqueiam tiles externos d
 - Smart Journey mostra ônibus, parada, ETA em faixa, caminhada autorizada, margem de saída e avisos. Informações insuficientes resultam em previsão indisponível.
 - Android Driver com pareamento protegido, serviço de GPS em segundo plano, buffer da última posição, controles operacionais e encerramento da transmissão.
 - Avisos, leitura, atraso, pane/resolução e espera autorizada até cinco minutos. Web Push opcional e de melhor esforço.
-- Simulador separado de GPS, circuito OSM de Campina e dados fictícios. Rotas e dados anteriores preservados.
-- Embarques, ausências, responsáveis, calendário, manutenção, despesas, CSV e auditoria mantidos.
+- Simulador separado de GPS e dados fictícios. Rotas de exemplo locais arquivadas com histórico preservado; novas instalações não criam trajetos automaticamente.
+- Embarques, ausências, calendário, manutenção, despesas, CSV e auditoria mantidos. Perfis antigos de responsável/monitor sem acesso nesta versão.
 
 ## Mapas da Paraíba
 
@@ -61,7 +61,7 @@ npm run db:migrate:local
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Abrir http://127.0.0.1:5173, autenticar no modo local e usar **Abrir demonstração**. Em **Configurações**, preparar circuitos e abrir Sala Smart Journey. Em outro navegador acessar `/#/participar`. Login simulado de desenvolvimento não é autenticação de produção.
+Abrir http://127.0.0.1:5173, autenticar no modo local e usar **Configurar apresentação**. Criar/publicar a rota, programar viagem e conectar os celulares em **Configurações**. Em outro navegador acessar `/#/participar`. Login simulado de desenvolvimento não é autenticação de produção.
 
 ## Verificação
 
@@ -80,8 +80,8 @@ npm audit --prefix apps/driver
 
 ## Driver, deploy e segurança
 
-[Instalar e compilar Driver](docs/DRIVER.md) · [Cloudflare e acesso entre dispositivos](docs/DEPLOYMENT.md) · [segurança](docs/SECURITY.md).
-O APK foi compilado, mas GPS com tela bloqueada exige ensaio físico ainda pendente. O Site privado exige login de gateway; acesso direto de participantes/Android requer endpoint autorizado. O Worker confia em identidade protegida pelo gateway Sites e não deve ser exposto cru a headers arbitrários. Nenhum segredo deve ir para cliente/Git.
+[Instalar e compilar Driver](docs/DRIVER.md) · [Cloudflare próprio](docs/CLOUDFLARE.md) · [Sites e execução local](docs/DEPLOYMENT.md) · [segurança](docs/SECURITY.md).
+APK V7 compilado, mas GPS com tela bloqueada exige ensaio físico ainda pendente. O modo Cloudflare próprio verifica JWT Access para a equipe e mantém sessões restritas de aluno/Driver. O modo Sites continua dependendo do gateway confiável. Nenhum segredo deve ir para cliente/Git.
 
 ## Documentação
 

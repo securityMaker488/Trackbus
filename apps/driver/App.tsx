@@ -20,6 +20,7 @@ import {
   readActive,
   request,
   startTracking,
+  ensureGpsPermissions,
   stopTracking,
   trackingStatus,
   unpair,
@@ -29,8 +30,8 @@ import {
 const colors = {
   bg: "#090909",
   panel: "#141414",
-  border: "#A16207",
-  ink: "#FDE047",
+  border: "#383838",
+  ink: "#F5F5F5",
   accent: "#FACC15",
 };
 function Action({
@@ -138,6 +139,25 @@ export default function App() {
       sub.remove();
     };
   }, [ready]);
+  async function beginTrip() {
+    if (!t) return;
+    await ensureGpsPermissions();
+    await request("/trips/" + t.id + "/status", { status: "in_progress" });
+    try {
+      await startTracking(t.id);
+      setMessage(
+        "Rota iniciada. Sua localização será compartilhada com os alunos.",
+      );
+    } catch (e) {
+      throw Error(
+        "A viagem iniciou, mas o GPS não foi ativado. Tente ativar novamente. " +
+          (e as Error).message,
+        { cause: e },
+      );
+    } finally {
+      await refresh();
+    }
+  }
   async function changeStatus(status: string) {
     if (!t) return;
     if (status === "completed")
@@ -219,7 +239,7 @@ export default function App() {
         </View>
       ) : (
         <>
-          <Text style={styles.title}>Viagens atribuídas</Text>
+          <Text style={styles.title}>Suas rotas</Text>
           {trips.length ? (
             trips.map((x) => (
               <Action
@@ -243,7 +263,10 @@ export default function App() {
               />
             ))
           ) : (
-            <Text style={styles.text}>Nenhuma viagem de GPS atribuída.</Text>
+            <Text style={styles.text}>
+              A gestão ainda não programou uma viagem para você. As rotas
+              aparecerão aqui automaticamente.
+            </Text>
           )}
           <View style={styles.panel}>
             <Text style={styles.title}>GPS do motorista</Text>
@@ -281,9 +304,9 @@ export default function App() {
               <>
                 {t.status === "scheduled" && (
                   <Action
-                    label="Iniciar viagem"
+                    label="Iniciar rota com GPS"
                     disabled={busy || !safe}
-                    onPress={() => exec(() => changeStatus("in_progress"))}
+                    onPress={() => exec(beginTrip)}
                   />
                 )}
                 {t.status === "in_progress" && (

@@ -1,3 +1,5 @@
+import { drizzle } from "drizzle-orm/d1";
+import { seedScenario } from "../fixtures/scenario";
 import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { readFileSync, readdirSync } from "node:fs";
@@ -55,8 +57,8 @@ beforeAll(async () => {
       .filter((s) => s.trim()))
       await DB.prepare(statement).run();
   }
-  expect((await req("/bootstrap", {})).status).toBe(201);
-  expect((await req("/bootstrap", {}, "owner-b")).status).toBe(201);
+  await seedScenario(drizzle(DB), "owner-a", "Administrador teste");
+  await seedScenario(drizzle(DB), "owner-b", "Outra escola");
   a = await state();
   b = await state("owner-b");
 });
@@ -112,21 +114,19 @@ describe("limites de confiança / autorização", () => {
       (await req("/vehicles", { name: "Bus" }, "owner-a", cookie)).status,
     ).toBe(403);
   });
-  it("responsável recebe somente aluno vinculado", async () => {
-    const cookie = await persona("guardian"),
-      data = await state("owner-a", cookie);
-    expect(data.students).toHaveLength(1);
-    expect(data.students[0].name).toBe("Ana Lima");
-    expect(
-      (
-        await req(
-          "/absences",
-          { studentId: a.students[1].id, date: "2027-01-05", shift: "Manhã" },
-          "owner-a",
-          cookie,
-        )
-      ).status,
-    ).toBe(404);
+  it("limita criação e troca de perfil a aluno, motorista e admin", async () => {
+    for (const role of ["guardian", "monitor"]) {
+      expect((await req("/demo/profile", { role })).status).toBe(422);
+      expect(
+        (
+          await req("/memberships", {
+            userId: "blocked-" + role,
+            name: "Perfil antigo",
+            role,
+          })
+        ).status,
+      ).toBe(422);
+    }
   });
   it("sessão demonstrativa não funciona com outro usuário", async () => {
     const cookie = await persona("student"),
@@ -318,7 +318,7 @@ describe("fluxo vertical persistente", () => {
   it("embarque exige operador autorizado, viagem e sequência corretos", async () => {
     const t = a.trips.find((t) => t.status === "paused")!,
       st = a.students.find((st) => st.routeId === t.routeId)!,
-      cookie = await persona("monitor"),
+      cookie = "",
       data = {
         tripId: t.id,
         studentId: st.id,
@@ -354,7 +354,7 @@ describe("fluxo vertical persistente", () => {
         })
       ).status,
     ).toBe(201);
-    const cookie = await persona("guardian");
+    const cookie = await persona("student");
     expect((await state("owner-a", cookie)).expenses).toHaveLength(0);
   });
   it("gera CSV e mantém histórico de operações", async () => {

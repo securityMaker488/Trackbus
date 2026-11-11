@@ -2,7 +2,7 @@
  * separately in an authorized Cloudflare account with a server-side secret. */
 type Environment = { SITE_ORIGIN: string; SITE_SERVICE_TOKEN: string };
 const readOnly =
-  /^\/(?:$|favicon\.svg$|trackbus-logo\.png$|icon-(?:192|512)\.png$|manifest\.webmanifest$|offline\.html$|sw\.js$|map-worker-v6\.mjs$|_next\/static\/[\w./-]+$|api\/(?:health|me|journey\/(?:schools|state)|driver\/(?:trips|incidents))$)/;
+  /^\/(?:$|favicon\.svg$|trackbus-logo\.png$|icon-(?:192|512)\.png$|manifest\.webmanifest$|offline\.html$|sw\.js$|map-worker-v6\.mjs$|_next\/static\/[\w./-]+$|api\/(?:health|me|auth\/config|journey\/(?:schools|state)|driver\/(?:trips|incidents))$)/;
 const writes =
   /^\/api\/(?:journey\/(?:join|leave|select|walk|push)|driver\/(?:exchange|revoke)|trips\/[\w:%-]+\/(?:status|location|wait)|notices(?:\/[\w:%-]+\/read)?|incidents\/[\w:%-]+\/resolve)$/;
 export async function eventGateway(

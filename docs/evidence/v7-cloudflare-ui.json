@@ -1,0 +1,9 @@
+{
+  "scope": "produção compilada, Wrangler local, sem deploy",
+  "studentJoin": true,
+  "adminDenied": 403,
+  "loginPath": "/entrar",
+  "runtimeErrors": [],
+  "missingAssets": [],
+  "mobileOverflow": false
+}

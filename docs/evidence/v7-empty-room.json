@@ -1,0 +1,57 @@
+{
+  "scope": "D1 local",
+  "archived": [
+    {
+      "id": "1e87b2c1-b8ab-4138-ac85-b1c24b01b68e:route-0",
+      "name": "Rota 01 · Federação"
+    },
+    {
+      "id": "1e87b2c1-b8ab-4138-ac85-b1c24b01b68e:route-1",
+      "name": "Rota 02 · Centro"
+    },
+    {
+      "id": "1e87b2c1-b8ab-4138-ac85-b1c24b01b68e:route-2",
+      "name": "Rota 03 · Rio Vermelho"
+    },
+    {
+      "id": "1e87b2c1-b8ab-4138-ac85-b1c24b01b68e:fect:gps:r",
+      "name": "Circuito Congretech · GPS real"
+    },
+    {
+      "id": "1e87b2c1-b8ab-4138-ac85-b1c24b01b68e:fect:simulation:r",
+      "name": "Circuito Congretech · Simulação"
+    },
+    {
+      "id": "1e87b2c1-b8ab-4138-ac85-b1c24b01b68e:congretech-pb-v6:gps:r",
+      "name": "Circuito Congretech · Campina Grande · GPS real"
+    },
+    {
+      "id": "1e87b2c1-b8ab-4138-ac85-b1c24b01b68e:congretech-pb-v6:simulation:r",
+      "name": "Circuito Congretech · Campina Grande · Simulação"
+    },
+    {
+      "id": "a55b2634-21f1-4207-8c75-5e373edcc51e",
+      "name": "Rota PB por clique 1794276590103"
+    },
+    {
+      "id": "5d8958ab-b2c2-41d7-97c1-257d3db52b18",
+      "name": "Rota PB por clique 1794276720261"
+    },
+    {
+      "id": "27911893-0793-4cd3-95c3-430ad20d9e2b",
+      "name": "Rota PB por clique 1794276850544"
+    },
+    {
+      "id": "56a80857-8de5-401f-b17c-973549e25532",
+      "name": "Rota PB por clique 1794277003987"
+    },
+    {
+      "id": "9c7937bc-aa41-4191-bc91-55d66d5b182a",
+      "name": "Rota PB por clique 1794317597429"
+    }
+  ],
+  "visibleRoutes": 0,
+  "visibleTrips": 0,
+  "backup": "work/pre-v7-demo.sql",
+  "history": "Preservado; arquivamento via API autenticada"
+}

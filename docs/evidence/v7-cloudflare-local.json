@@ -1,0 +1,38 @@
+{
+  "scope": "Worker de produção em Wrangler local; nenhum deploy",
+  "results": [
+    {
+      "path": "/api/health",
+      "status": 200
+    },
+    {
+      "path": "/api/auth/config",
+      "status": 200
+    },
+    {
+      "path": "/api/state",
+      "status": 401
+    },
+    {
+      "path": "/entrar",
+      "status": 401
+    },
+    {
+      "path": "/manifest.webmanifest",
+      "status": 200
+    },
+    {
+      "path": "/trackbus-logo.png",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/CcyWYbDU.js",
+      "status": 200,
+      "kind": "production script"
+    },
+    {
+      "path": "/",
+      "status": 200
+    }
+  ]
+}

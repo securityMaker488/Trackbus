@@ -1,3 +1,5 @@
+import { drizzle } from "drizzle-orm/d1";
+import { seedScenario } from "../fixtures/scenario";
 import { beforeAll, afterAll, it, expect } from "vitest";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { readFileSync, readdirSync } from "node:fs";
@@ -45,7 +47,11 @@ beforeAll(async () => {
       .split("--> statement-breakpoint")
       .filter((s) => s.trim()))
       await DB.prepare(sql).run();
-  expect((await request("/bootstrap", {})).status).toBe(201);
+  await seedScenario(
+    drizzle(DB),
+    "geography-admin",
+    "Administrador geográfico",
+  );
 });
 afterAll(async () => {
   await mf?.dispose();

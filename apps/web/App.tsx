@@ -15,6 +15,7 @@ import {
 import { useForm } from "react-hook-form";
 import { Dialog } from "radix-ui";
 import { Toaster, toast } from "sonner";
+import { InstallApp } from "./InstallApp";
 import {
   LayoutDashboard,
   Radio,
@@ -75,12 +76,23 @@ import { Brand } from "./Brand";
 import type { State, Trip, Route } from "../../packages/shared/types";
 import {
   transitions,
+  activeRoles,
   type Role,
   type Stop,
   type Point,
   project,
 } from "../../packages/domain";
 
+const extraPaths = new Set([
+  "/students",
+  "/boarding",
+  "/absences",
+  "/calendar",
+  "/maintenance",
+  "/expenses",
+  "/reports",
+  "/audit",
+]);
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } },
 });
@@ -414,7 +426,7 @@ const menu: {
   },
   {
     path: "/students",
-    label: "Alunos e responsáveis",
+    label: "Alunos",
     icon: GraduationCap,
     section: "GESTÃO",
     roles: ["admin", "guardian", "student"],
@@ -503,6 +515,11 @@ function App() {
     [tripId, setTripId] = useState<string | null>(null),
     [search, setSearch] = useState(""),
     [filter, setFilter] = useState("all");
+  const auth = useQuery({
+    queryKey: ["auth-config"],
+    queryFn: () => api<{ loginPath: string }>("/auth/config"),
+    staleTime: 300000,
+  });
   const me = useQuery({
     queryKey: ["me"],
     queryFn: () =>
@@ -577,6 +594,7 @@ function App() {
           }}
         />
         <a href="#/">Voltar à operação</a>
+        <InstallApp />
       </div>
     );
   if (me.error || me.data?.needsSetup)
@@ -610,28 +628,25 @@ function App() {
                 }
               }}
             >
-              Abrir demonstração <ArrowRight size={18} />
+              Configurar apresentação <ArrowRight size={18} />
             </button>
           ) : (
             <a
               className="button primary"
-              href="/signin-with-chatgpt?return_to=/"
+              href={auth.data?.loginPath || "/signin-with-chatgpt?return_to=/"}
               target="_top"
             >
-              Entrar com sua conta <ArrowRight size={18} />
+              Entrar na operação <ArrowRight size={18} />
             </a>
           )}
           <small>FECT & Congretech · Dados fictícios · Acesso privado</small>
+          <InstallApp />
         </div>
         <div className="welcome-art">
-          <div className="orb">
-            <Brand large />
-          </div>
-          <span className="orbit one" />
-          <span className="orbit two" />
-          <div className="welcome-float">
+          <Brand large />
+          <p className="welcome-caption">
             <span className="live-dot" /> Sua operação, em um só lugar.
-          </div>
+          </p>
         </div>
         <footer>TRACKBUS / I.SEE TECHNOLOGIES</footer>
       </div>
@@ -659,6 +674,8 @@ function App() {
     admin = d.actor.role === "admin",
     role = d.actor.role,
     navItems = menu.filter((m) => m.roles.includes(role)),
+    primaryNav = navItems.filter((m) => !extraPaths.has(m.path)),
+    extraNav = navItems.filter((m) => extraPaths.has(m.path)),
     page = navItems.find((m) => m.path === location.pathname) || navItems[0],
     path = page.path,
     unread = d.notices.filter((n) => !n.read).length,
@@ -671,14 +688,19 @@ function App() {
       label: `${v.name} · ${v.plate}`,
     })),
     routeOpts = d.routes.map((r) => ({ value: r.id, label: r.name }));
-  const openTripForm = () =>
+  const openTripForm = (selectedRouteId?: string) =>
     setForm({
       title: "Programar viagem",
       subtitle: "A escala e a disponibilidade serão verificadas ao salvar.",
       path: "/trips",
       fields: [
         { name: "name", label: "Nome da viagem", value: "Ida · Manhã" },
-        { name: "routeId", label: "Rota", options: routeOpts },
+        {
+          name: "routeId",
+          label: "Rota",
+          options: routeOpts,
+          value: selectedRouteId,
+        },
         {
           name: "trackingMode",
           label: "Fonte de posição",
@@ -829,12 +851,6 @@ function App() {
           required: false,
         },
         {
-          name: "userId",
-          label: "ID da conta vinculada",
-          value: v?.userId || "",
-          required: false,
-        },
-        {
           name: "status",
           label: "Situação",
           value: v?.status,
@@ -844,7 +860,7 @@ function App() {
           })),
         },
       ],
-      transform: (x) => ({ ...x, userId: x.userId || null }),
+      transform: (x) => ({ ...x, userId: v?.userId || null }),
     });
   const openStudent = (st?: State["students"][number]) =>
     setForm({
@@ -925,7 +941,7 @@ function App() {
     "/drivers": () => openDriver(),
     "/students": () => openStudent(),
     "/routes": () => setRouteEdit("new"),
-    "/trips": openTripForm,
+    "/trips": () => openTripForm(),
     "/notices": () => openNotice(),
     "/calendar": () =>
       setForm({
@@ -1035,9 +1051,9 @@ function App() {
           <ChevronDown size={14} />
         </div>
         <nav>
-          {navItems.map((m, i) => (
+          {primaryNav.map((m, i) => (
             <div key={m.path}>
-              {i === 0 || navItems[i - 1].section !== m.section ? (
+              {i === 0 || primaryNav[i - 1].section !== m.section ? (
                 <div className="nav-section">{m.section}</div>
               ) : null}
               <NavLink
@@ -1057,6 +1073,26 @@ function App() {
               </NavLink>
             </div>
           ))}
+          {!!extraNav.length && (
+            <details
+              className="more-tools"
+              open={extraNav.some((m) => m.path === path) || undefined}
+            >
+              <summary>Mais ferramentas</summary>
+              {extraNav.map((m) => (
+                <NavLink
+                  key={m.path}
+                  to={m.path}
+                  className={({ isActive }) =>
+                    `nav-item ${isActive ? "active" : ""}`
+                  }
+                >
+                  <m.icon size={18} />
+                  <span>{m.label}</span>
+                </NavLink>
+              ))}
+            </details>
+          )}
         </nav>
         <div className="sidebar-bottom">
           <div className="secure-card">
@@ -1088,7 +1124,7 @@ function App() {
             >
               <Menu size={20} />
             </button>
-            <span>Workspace</span>
+            <span>TrackBus</span>
             <ChevronRight size={14} />
             <strong>{page.label}</strong>
           </div>
@@ -1126,11 +1162,13 @@ function App() {
                     }
                   }}
                 >
-                  {Object.entries(roleLabels).map(([value, label]) => (
-                    <option value={value} key={value}>
-                      {label}
-                    </option>
-                  ))}
+                  {Object.entries(roleLabels)
+                    .filter(([role]) => activeRoles.some((r) => r === role))
+                    .map(([value, label]) => (
+                      <option value={value} key={value}>
+                        {label}
+                      </option>
+                    ))}
                 </select>
               ) : (
                 <small>{roleLabels[role]}</small>
@@ -1175,8 +1213,16 @@ function App() {
                   >
                     <Download size={16} /> Relatórios
                   </button>
-                  <button className="button primary" onClick={openTripForm}>
-                    <Plus size={17} /> Programar viagem
+                  <button
+                    className="button primary"
+                    onClick={() =>
+                      d.routes.length ? openTripForm() : setRouteEdit("new")
+                    }
+                  >
+                    <Plus size={17} />{" "}
+                    {d.routes.length
+                      ? "Programar viagem"
+                      : "Criar primeira rota"}
                   </button>
                 </>
               ) : newActions[path] &&
@@ -1203,6 +1249,52 @@ function App() {
           )}
           {path === "/" && (
             <>
+              <section
+                className="operation-guide"
+                aria-label="Preparar apresentação"
+              >
+                <div>
+                  <span className="eyebrow">SEU PRÓXIMO PASSO</span>
+                  <h2>
+                    {!d.routes.length
+                      ? "Vamos criar sua primeira rota?"
+                      : !d.trips.length
+                        ? "Sua rota está pronta. Vamos iniciar?"
+                        : "Tudo pronto para acompanhar a viagem."}
+                  </h2>
+                  <p>
+                    Crie o trajeto, prepare o motorista e compartilhe com os
+                    alunos.
+                  </p>
+                </div>
+                <div className="setup-steps">
+                  <button onClick={() => setRouteEdit("new")}>
+                    <span>01</span>
+                    <strong>Criar rota no mapa</strong>
+                    <small>
+                      {d.routes.length
+                        ? `${d.routes.length} rota(s) criada(s)`
+                        : "Origem, paradas e destino"}
+                    </small>
+                    <ArrowUpRight size={18} />
+                  </button>
+                  <button
+                    disabled={!d.routes.length}
+                    onClick={() => openTripForm(d.routes[0]?.id)}
+                  >
+                    <span>02</span>
+                    <strong>Programar viagem</strong>
+                    <small>Motorista, veículo e horário</small>
+                    <ArrowUpRight size={18} />
+                  </button>
+                  <button onClick={() => nav("/settings")}>
+                    <span>03</span>
+                    <strong>Conectar os celulares</strong>
+                    <small>Código do motorista e link do aluno</small>
+                    <ArrowUpRight size={18} />
+                  </button>
+                </div>
+              </section>
               <Stats
                 items={[
                   {
@@ -1366,6 +1458,47 @@ function App() {
               </div>
             </>
           )}
+          {path === "/map" && role === "driver" && (
+            <section className="panel driver-start-card">
+              <div>
+                <span className="eyebrow">PAINEL DO MOTORISTA</span>
+                <h2>
+                  {active[0]?.name ||
+                    d.trips.find((t) => t.status === "scheduled")?.name ||
+                    "Aguardando sua próxima rota"}
+                </h2>
+                <p>
+                  {d.trips.some((t) =>
+                    [
+                      "scheduled",
+                      "in_progress",
+                      "paused",
+                      "interrupted",
+                    ].includes(t.status),
+                  )
+                    ? "Com o veículo parado, abra a viagem e inicie a rota com GPS."
+                    : "A gestão programa sua viagem. Ela aparecerá aqui automaticamente."}
+                </p>
+              </div>
+              {d.trips.some((t) =>
+                ["scheduled", "in_progress", "paused", "interrupted"].includes(
+                  t.status,
+                ),
+              ) && (
+                <button
+                  className="button primary"
+                  onClick={() =>
+                    setTripId(
+                      (active[0] ||
+                        d.trips.find((t) => t.status === "scheduled"))!.id,
+                    )
+                  }
+                >
+                  Abrir minha viagem <ArrowRight size={17} />
+                </button>
+              )}
+            </section>
+          )}
           {path === "/map" && (
             <>
               {role === "student" ? (
@@ -1438,6 +1571,22 @@ function App() {
           {path === "/routes" && (
             <>
               {listTools}
+              {!d.routes.length && (
+                <section className="panel first-route">
+                  <MapPin size={38} />
+                  <h2>O próximo trajeto começa com você.</h2>
+                  <p>
+                    Crie uma rota clicando no mapa. Publique para que os alunos
+                    possam acompanhar.
+                  </p>
+                  <button
+                    className="button primary"
+                    onClick={() => setRouteEdit("new")}
+                  >
+                    Criar primeira rota <ArrowRight size={17} />
+                  </button>
+                </section>
+              )}
               <div className="route-grid">
                 {filtered(d.routes).map((r, i) => (
                   <section className="panel route-card" key={r.id}>
@@ -1469,6 +1618,12 @@ function App() {
                       <span>v{r.version}</span>
                     </div>
                     <div className="route-card-actions">
+                      <button
+                        className="button primary"
+                        onClick={() => openTripForm(r.id)}
+                      >
+                        <Navigation size={16} /> Programar viagem
+                      </button>
                       <button
                         className="button secondary"
                         onClick={() =>
@@ -1517,6 +1672,19 @@ function App() {
                         }}
                       >
                         <Copy size={17} />
+                      </button>
+                      <button
+                        className="text-button"
+                        onClick={async () => {
+                          if (
+                            window.confirm(
+                              "Remover esta rota dos painéis? As viagens de demonstração serão encerradas. O histórico será preservado.",
+                            )
+                          )
+                            await act(`/routes/${r.id}/archive`, {});
+                        }}
+                      >
+                        Remover rota
                       </button>
                     </div>
                   </section>
@@ -1658,31 +1826,6 @@ function App() {
                         onClick={() => openStudent(st)}
                       >
                         Editar
-                      </button>
-                      <button
-                        className="text-button"
-                        onClick={() =>
-                          setForm({
-                            title: "Vincular responsável",
-                            subtitle:
-                              "Confirme previamente a relação legal. Este registro declara que a instituição verificou o vínculo.",
-                            path: "/guardians",
-                            fields: [
-                              { name: "name", label: "Nome do responsável" },
-                              {
-                                name: "userId",
-                                label: "ID da conta do responsável",
-                              },
-                            ],
-                            transform: (x) => ({
-                              ...x,
-                              studentId: st.id,
-                              verified: true,
-                            }),
-                          })
-                        }
-                      >
-                        Vincular
                       </button>
                     </div>
                   ) : (
@@ -2276,12 +2419,14 @@ function App() {
                 <h2>Acesso e permissões</h2>
                 <p>A identidade autentica. O vínculo institucional autoriza.</p>
                 <div className="report-facts">
-                  {d.memberships.map((m) => (
-                    <span key={m.id}>
-                      {m.name}
-                      <strong>{roleLabels[m.role]}</strong>
-                    </span>
-                  ))}
+                  {d.memberships
+                    .filter((m) => activeRoles.some((r) => r === m.role))
+                    .map((m) => (
+                      <span key={m.id}>
+                        {m.name}
+                        <strong>{roleLabels[m.role]}</strong>
+                      </span>
+                    ))}
                 </div>
                 <button
                   className="button secondary"
@@ -2300,9 +2445,11 @@ function App() {
                         {
                           name: "role",
                           label: "Perfil",
-                          options: Object.entries(roleLabels).map(
-                            ([value, label]) => ({ value, label }),
-                          ),
+                          options: Object.entries(roleLabels)
+                            .filter(([role]) =>
+                              activeRoles.some((r) => r === role),
+                            )
+                            .map(([value, label]) => ({ value, label })),
                         },
                       ],
                     })
@@ -2877,6 +3024,44 @@ function TripDetail({
       }
     }
   }, [terminal]);
+  async function beginWebGps() {
+    if (!navigator.geolocation) {
+      setGps("GPS indisponível");
+      return;
+    }
+    setGps("Verificando localização…");
+    try {
+      const p = await new Promise<GeolocationPosition>((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 20000,
+        }),
+      );
+      if (p.coords.accuracy > 100 || Date.now() - p.timestamp > 60000)
+        throw Error("Aguarde um sinal de GPS mais preciso antes de iniciar.");
+      await api(`/trips/${t.id}/status`, { status: "in_progress" });
+      await api(`/trips/${t.id}/location`, {
+        lat: p.coords.latitude,
+        lng: p.coords.longitude,
+        accuracy: p.coords.accuracy,
+        timestamp: p.timestamp,
+        speed: p.coords.speed,
+        heading: p.coords.heading,
+        source: "gps",
+      });
+      lastSent.current = Date.now();
+      toggleGps();
+      setGps("GPS ativo");
+      refresh();
+    } catch (e) {
+      setGps("GPS não ativado");
+      toast.error(
+        (e as Error).message || "Permita sua localização para iniciar.",
+      );
+      refresh();
+    }
+  }
   function toggleGps() {
     if (watch.current !== null) {
       navigator.geolocation.clearWatch(watch.current);
@@ -2975,7 +3160,12 @@ function TripDetail({
                       disabled={!safe}
                       className={`button ${s === "in_progress" ? "primary" : "secondary"}`}
                       onClick={() =>
-                        run(`/trips/${t.id}/status`, { status: s })
+                        s === "in_progress" &&
+                        t.status === "scheduled" &&
+                        d.actor.role === "driver" &&
+                        t.trackingMode !== "simulation"
+                          ? beginWebGps()
+                          : run(`/trips/${t.id}/status`, { status: s })
                       }
                     >
                       {s === "in_progress" ? (
@@ -2986,7 +3176,11 @@ function TripDetail({
                         <Pause size={15} />
                       )}{" "}
                       {s === "in_progress"
-                        ? "Iniciar / retomar"
+                        ? t.status === "scheduled" &&
+                          d.actor.role === "driver" &&
+                          t.trackingMode !== "simulation"
+                          ? "Iniciar rota com GPS"
+                          : "Iniciar / retomar"
                         : statusLabels[s]}
                     </button>
                   ))}

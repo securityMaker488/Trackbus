@@ -43,6 +43,13 @@
       "when": 1794316902401,
       "tag": "0005_gps_route_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794342897855,
+      "tag": "0006_archive_routes",
+      "breakpoints": true
     }
   ]
 }

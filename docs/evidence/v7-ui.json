@@ -1,0 +1,11 @@
+{
+  "desktop": "1366x900",
+  "mobile": "390x844",
+  "logoOriginal": true,
+  "logoBlend": "lighten",
+  "studentEmptyRoutes": 0,
+  "horizontalOverflow": false,
+  "pwaHelp": "verified",
+  "nativeInstall": "requires HTTPS and supported browser",
+  "tiles": "E2E block tiles; visual entry/empty screens do not require maps"
+}
