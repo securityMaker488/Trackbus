@@ -56,10 +56,17 @@ export function createAccessVerifier(
       (!cached.keys.some((k) => k.kid === header.kid) &&
         now - cached.checked >= 30000)
     ) {
-      const response = await fetcher(`https://${domain}/cdn-cgi/access/certs`, {
-        redirect: "error",
-        signal: AbortSignal.timeout(5000),
-      });
+      let response: Response;
+      try {
+        response = await fetcher(`https://${domain}/cdn-cgi/access/certs`, {
+          // Workers supports manual/follow, not the browser's error mode.
+          // Reject redirects below so keys cannot come from another origin.
+          redirect: "manual",
+          signal: AbortSignal.timeout(5000),
+        });
+      } catch {
+        throw Error("Consulta de chaves indisponível");
+      }
       if (!response.ok) throw Error("Identidade temporariamente indisponível");
       const text = await response.text();
       if (text.length > 65536) throw Error("Chaves inválidas");
@@ -78,13 +85,18 @@ export function createAccessVerifier(
         (!k.use || k.use === "sig"),
     );
     if (!jwk) throw Error("Chave de identidade desconhecida");
-    const key = await crypto.subtle.importKey(
-      "jwk",
-      jwk,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      false,
-      ["verify"],
-    );
+    let key: CryptoKey;
+    try {
+      key = await crypto.subtle.importKey(
+        "jwk",
+        jwk,
+        { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+        false,
+        ["verify"],
+      );
+    } catch {
+      throw Error("Chave criptográfica inválida");
+    }
     if (
       !(await crypto.subtle.verify(
         "RSASSA-PKCS1-v1_5",

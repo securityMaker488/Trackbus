@@ -1,6 +1,8 @@
 # Cloudflare próprio — TrackBus V7
 
-Configuração preparada em 11/11/2026. Nenhum deploy, alteração de DNS, configuração Access ou migração remota foi executado nesta entrega. `wrangler.cloudflare.jsonc` contém marcadores que precisam ser preenchidos na conta autorizada.
+Publicado na conta autorizada: https://trackbus-demonstracao.goldensla6.workers.dev. D1 exclusivo `trackbus-demo`, migrações `0000` a `0006` aplicadas. Login administrativo real validado em 14/11/2026, com Access restrito ao proprietário e sessão de seis horas. A aplicação foi inicializada sem rotas; a rota temporária usada no ensaio foi arquivada, preservando histórico.
+
+Evidências: `evidence/cloudflare-published-smoke.json` e `evidence/cloudflare-student-published.json`. Login, cadastro/publicação no D1, aluno independente, escolha/favorito, restrição administrativa, posição simulada, ETA e aviso de atraso passaram. GPS físico e segundo plano Android continuam pendentes de aparelho. APK disponível em `/TrackBus-Driver-v7-arm64.apk`; hash em `V7-ENTREGA.md`.
 
 ## Como o acesso funciona
 
@@ -62,4 +64,4 @@ Para caminhada fora das áreas locais já cobertas, configure `VALHALLA_URL` ins
 
 ## Limitações de segurança a acompanhar
 
-A validação Access foi testada com JWTs assinados de teste, não com uma conta Cloudflare publicada. Há limites de mutação por identidade persistidos no D1 e limites para entrada/pareamento; para exposição ampla, complemente com controles da conta contra abuso antes de chegar ao Worker. CSP ainda permite `unsafe-inline` para o framework existente; não foi realizado pentest independente. Dados reais de menores ficam fora deste ambiente de demonstração.
+A validação Access foi testada com assinatura em testes, no runtime Workerd e com login real publicado. Uma incompatibilidade `redirect: error` foi corrigida para `manual`, rejeitando respostas de redirecionamento das chaves. Há limites de mutação por identidade persistidos no D1 e limites para entrada/pareamento; para exposição ampla, complemente com controles da conta contra abuso antes de chegar ao Worker. CSP ainda permite `unsafe-inline` para o framework existente; não foi realizado pentest independente. Dados reais de menores ficam fora deste ambiente de demonstração.

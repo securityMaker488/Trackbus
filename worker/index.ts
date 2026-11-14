@@ -24,7 +24,32 @@ const worker = {
             "",
           env,
         );
-      } catch {
+      } catch (error) {
+        // Log only known failure categories, never tokens, claims or cookies.
+        const categories = new Set([
+          "JWT inválido",
+          "Cloudflare Access não configurado",
+          "Identidade temporariamente indisponível",
+          "Consulta de chaves indisponível",
+          "Chave criptográfica inválida",
+          "Chaves inválidas",
+          "Chave de identidade desconhecida",
+          "Assinatura inválida",
+          "Sessão de identidade inválida ou expirada",
+        ]);
+        console.warn("access_login_rejected", {
+          reason:
+            error instanceof Error && categories.has(error.message)
+              ? error.message
+              : "Falha ao verificar identidade",
+          errorType:
+            error instanceof Error &&
+            ["Error", "TypeError", "SyntaxError", "DOMException"].includes(
+              error.name,
+            )
+              ? error.name
+              : "Other",
+        });
         return new Response(
           "Acesso não autorizado. Entre pela aplicação Cloudflare Access configurada para /entrar.",
           { status: 401, headers: { "Cache-Control": "no-store" } },

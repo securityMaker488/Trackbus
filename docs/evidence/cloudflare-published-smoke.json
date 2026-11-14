@@ -1,0 +1,81 @@
+{
+  "date": "2026-11-14T02:58:13.902Z",
+  "base": "https://trackbus-demonstracao.goldensla6.workers.dev",
+  "results": [
+    {
+      "path": "/api/health",
+      "status": 200,
+      "forgedHeader": false
+    },
+    {
+      "path": "/api/auth/config",
+      "status": 200,
+      "forgedHeader": false
+    },
+    {
+      "path": "/api/state",
+      "status": 401,
+      "forgedHeader": false
+    },
+    {
+      "path": "/api/state",
+      "status": 401,
+      "forgedHeader": true
+    },
+    {
+      "path": "/manifest.webmanifest",
+      "status": 200,
+      "forgedHeader": false
+    },
+    {
+      "path": "/_next/static/css/nhg15mcT.css",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/css/C8sEATnE.css",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/CBQmqnKs.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/CcyWYbDU.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/B0PXqnjO.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/CwqJEvba.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/Crvooy-K.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/BaCmGOi7.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/QKSpSrov.js",
+      "status": 200
+    },
+    {
+      "path": "/",
+      "status": 200,
+      "forgedHeader": false
+    }
+  ],
+  "apk": {
+    "bytes": 24114096,
+    "sha256": "E1DA3EBDC35B2F3AA34E28DD61603600EEE3AF1A65D9BFD9268EF539A19DB80D"
+  },
+  "adminEntry": {
+    "status": 302,
+    "host": "round-limit-693e.cloudflareaccess.com"
+  },
+  "physicalGps": "não realizado"
+}

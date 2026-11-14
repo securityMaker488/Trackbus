@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-14T03:03:26.963Z",
+  "baseURL": "https://trackbus-demonstracao.goldensla6.workers.dev",
+  "studentJoin": true,
+  "schoolRouteWithoutAssignment": true,
+  "selectedStop": true,
+  "favorite": true,
+  "adminDenied": 403,
+  "routeEditDenied": 403,
+  "crossSessionSimulation": true,
+  "positionSource": "simulation",
+  "delayNotice": true,
+  "etaAvailable": true,
+  "mobileOverflow": false,
+  "runtimeErrors": [],
+  "physicalGps": "não realizado; posição transmitida pelo simulador explícito"
+}

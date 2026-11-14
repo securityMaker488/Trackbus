@@ -4,7 +4,7 @@
 
 Plataforma de transporte escolar da **I.See Technologies**, preparada para demonstração técnica na **FECT e Congretech, em Campina Grande/PB**. Gestão cria rotas no mapa; alunos da mesma escola escolhem rota e parada; Smart Journey combina posição do ônibus, caminhada, estimativas e avisos.
 
-Esta atualização preserva o projeto e o histórico anteriores. A etapa V7 foi feita localmente, sem push ou publicação. Estado de verificação e pendências em [relatório V7](docs/V7-ENTREGA.md). Há somente três perfis ativos: aluno, motorista e administrador. A apresentação começa sem rotas, para criação ao vivo.
+Esta atualização preserva o projeto e o histórico anteriores. [Demonstração publicada no Cloudflare](https://trackbus-demonstracao.goldensla6.workers.dev) · [Entrada administrativa protegida](https://trackbus-demonstracao.goldensla6.workers.dev/entrar) · [APK Android arm64](https://trackbus-demonstracao.goldensla6.workers.dev/TrackBus-Driver-v7-arm64.apk). Estado de publicação e verificações em [Cloudflare](docs/CLOUDFLARE.md); relatório da etapa local em [V7](docs/V7-ENTREGA.md). Há somente três perfis ativos: aluno, motorista e administrador. A apresentação começa sem rotas, para criação ao vivo. Não foi realizado push ao GitHub nesta etapa.
 
 ## Interface
 
