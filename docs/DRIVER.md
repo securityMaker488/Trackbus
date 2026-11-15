@@ -1,10 +1,10 @@
 # TrackBus Driver
 
-Aplicativo Expo 58 / React Native 0.88.1, código em apps/driver. Android package `tech.isee.trackbus.driver`, versão 7.0.0, versionCode 8. Interface preta/amarela com branco para leitura e logo oficial fornecida pelo proprietário.
+Aplicativo Expo 58 / React Native 0.88.1, código em apps/driver. Android package `tech.isee.trackbus.driver`, versão 7.1.0, versionCode 9. Interface preta/amarela com branco para leitura e logo oficial fornecida pelo proprietário.
 
 ## Instalação e pareamento
 
-Instale o APK arm64 em Android compatível, autorizando instalação somente para o arquivo fornecido. USB opcional: `adb install -r TrackBus-Driver-v7-arm64.apk`.
+Instale o APK arm64 em Android compatível, autorizando instalação somente para o arquivo fornecido. USB opcional: `adb install -r TrackBus-Driver-v71-arm64.apk`.
 Crie/publique a rota e programe uma viagem GPS. No painel, Configurações → Conectar o motorista, escolha o motorista e gere o código. No app informe a origem HTTPS da API acessível ao aparelho e o código hexadecimal de 16 caracteres. Código dura 2min, uso único; Bearer dura 8h e fica no SecureStore. Uma URL privada do Sites que exige login no gateway não funciona diretamente no app. Para Cloudflare próprio, veja [configuração](CLOUDFLARE.md).
 
 Selecione viagem GPS atribuída, confirme veículo parado e toque **Iniciar rota com GPS**. Conceda localização em primeiro e segundo plano e notificações quando solicitadas. Android usa serviço com notificação persistente. Há pausa, retomada, atrasos, ocorrências, espera de 5min, encerramento de espera, viagem/GPS e desconexão. Se a viagem iniciar e a coleta falhar, o app informa essa condição e permite ativar o GPS novamente.
@@ -26,3 +26,10 @@ Instalar dependências nativas com `npm ci --prefix apps/driver` e verificar `np
 O script usa pasta curta quando necessário para evitar limite Windows de caminhos, executa prebuild e assembleRelease arm64-v8a, assina com chave de demonstração RSA3072 e verifica apksigner. APK fica em BuildCache/app/android/app/build/outputs/apk/release/app-release.apk quando usa staging. Senha da chave protegida por DPAPI; signing/_.p12 e _.dpapi são privados, nunca publicar. Certificado de demonstração não é credencial de login nem assinatura Play Store. Build iOS e distribuição de produção permanecem pendentes.
 
 O Driver apresenta distância restante e permanência detectada pelo backend. Coleta só começa ao iniciar a viagem atribuída e ativar GPS; não começa ao ligar o telefone. Leituras marcadas `mocked` pelo sistema são recusadas no app, sem substituir verificação física ou atestado de integridade do aparelho. Parâmetros e limitações conferidos na [documentação oficial Expo Location](https://docs.expo.dev/versions/latest/sdk/location/).
+
+
+## Criar rotas pelo Driver
+
+Com o aparelho conectado e sem GPS de viagem em execução, toque “Criar ou revisar rotas”. O navegador abre o editor da mesma instituição por acesso temporário. Crie o trajeto, salve rascunho e envie para aprovação. A gestão pode devolver com justificativa; após aprovação, só a gestão publica. O editor não inicia GPS de viagem. Ao concluir, encerre o acesso ao editor e retorne ao app.
+
+APK 7.1.0/code9, 24.115.264 bytes, arm64-v8a; assinatura v2 RSA3072 verificada. SHA256 `BE98FFE913BA5A3942AB135A50917C81C02531642C32C134390F018C25EC1A85`. App.tsx no staging tem hash igual ao repositório. Não houve ensaio Android físico nesta etapa.

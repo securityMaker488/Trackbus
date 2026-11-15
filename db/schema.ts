@@ -96,14 +96,30 @@ export const routes = sqliteTable(
       .$type<[number, number][]>()
       .notNull(),
     routed: integer("routed", { mode: "boolean" }).notNull().default(false),
+    distanceMeters: real("distance_meters"),
+    geometrySource: text("geometry_source").notNull().default("unknown"),
     published: integer("published", { mode: "boolean" })
       .notNull()
       .default(false),
     version: integer("version").notNull().default(1),
     archivedAt: integer("archived_at"),
+    createdBy: text("created_by"),
+    approval: text("approval")
+      .$type<"draft" | "pending" | "approved" | "rejected">()
+      .notNull()
+      .default("approved"),
+    reviewNote: text("review_note").notNull().default(""),
+    submittedAt: integer("submitted_at"),
+    reviewedAt: integer("reviewed_at"),
+    createdAt: integer("created_at").notNull().default(0),
+    updatedAt: integer("updated_at").notNull().default(0),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
   },
-  (t) => [index("route_org").on(t.orgId)],
+  (t) => [
+    index("route_org").on(t.orgId),
+    index("route_review").on(t.orgId, t.approval),
+    index("route_creator").on(t.orgId, t.createdBy),
+  ],
 );
 export const routeVersions = sqliteTable(
   "route_versions",
@@ -370,7 +386,10 @@ export const accessSessions = sqliteTable(
     orgId: org(),
     subject: text("subject").notNull(),
     name: text("name").notNull(),
-    kind: text("kind").$type<"visitor" | "pair" | "device">().notNull(),
+    kind: text("kind")
+      .$type<"visitor" | "pair" | "device" | "editor" | "handoff">()
+      .notNull(),
+    parentId: text("parent_id"),
     expires: integer("expires").notNull(),
   },
   (t) => [

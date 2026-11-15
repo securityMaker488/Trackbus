@@ -59,7 +59,7 @@ const worker = {
         Location: "/",
         "Cache-Control": "no-store",
       });
-      for (const cookie of ["tb_visitor", "tb_demo"])
+      for (const cookie of ["tb_visitor", "tb_demo", "tb_driver"])
         headers.append(
           "Set-Cookie",
           `${cookie}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Strict`,

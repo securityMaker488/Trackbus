@@ -100,6 +100,14 @@ export function DemoControls({
         No TrackBus Driver, informe o endereço abaixo e o código. Depois,
         escolha a viagem e toque em iniciar rota com GPS.
       </p>
+      <a
+        className="button secondary"
+        href="/TrackBus-Driver-v71-arm64.apk"
+        download
+      >
+        Baixar TrackBus Driver · Android
+      </a>
+      <small>Versão 7.1 · Android arm64 · Instale no celular autorizado.</small>
       <label>
         Endereço do TrackBus
         <input

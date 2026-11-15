@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import type { Itinerary, Position, Point } from "../../packages/domain";
 import { MapSearch } from "./MapSearch";
+import type { EditorFix } from "./MapSearch";
+import type { Poi } from "../../packages/shared/pois";
 import {
   splitItinerary,
   type TrackingProgress,
@@ -117,6 +119,12 @@ type Props = {
   onTripDetails?: (tripId: string) => void;
   onNotices?: () => void;
   large?: boolean;
+  editor?: boolean;
+  onLocate?: (fix: EditorFix) => void;
+  editorPosition?: EditorFix | null;
+  onViewportChange?: (center: Point) => void;
+  pointsOfInterest?: Poi[];
+  onPoiSelect?: (poi: Poi) => void;
 };
 const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -309,6 +317,12 @@ export default function MapView({
   onTripDetails,
   onNotices,
   large = false,
+  editor = false,
+  onLocate,
+  editorPosition,
+  onViewportChange,
+  pointsOfInterest = [],
+  onPoiSelect,
 }: Props) {
   const box = useRef<HTMLDivElement>(null),
     pick = useRef(onPick);
@@ -322,6 +336,8 @@ export default function MapView({
     [selected, setSelected] = useState("");
   const [now, setNow] = useState(() => Date.now());
   pick.current = onPick;
+  const viewport = useRef(onViewportChange);
+  viewport.current = onViewportChange;
   const fitted = useRef(false);
   const current = positions.find((v) => v.id === selected) || positions[0];
   const routeKey = JSON.stringify(routes),
@@ -351,6 +367,10 @@ export default function MapView({
           if (!disposed) setSourceError(true);
         });
         m.on("dragstart", () => setFollow(false));
+        m.on("moveend", () => {
+          const p = m.getCenter();
+          viewport.current?.({ lat: p.lat, lng: p.lng });
+        });
         m.on("click", (event) =>
           pick.current?.({
             lat: Number(event.lngLat.lat.toFixed(6)),
@@ -440,9 +460,9 @@ export default function MapView({
   }, [map, routeKey, progressKey]);
   useEffect(() => {
     if (!map) return;
-    if (!pick.current || !fitted.current) fitItineraries(map, routes, walking);
+    if (!editor || !fitted.current) fitItineraries(map, routes, walking);
     fitted.current = true;
-  }, [map, routeKey]);
+  }, [map, routeKey, editor]);
   useEffect(() => {
     if (!map) return;
     const data: FeatureCollection<LineString> = {
@@ -509,6 +529,30 @@ export default function MapView({
       />
       {map && (
         <>
+          {pointsOfInterest.map((p) => (
+            <MapMarker key={p.id} map={map} point={p}>
+              <button
+                type="button"
+                className="poi-marker"
+                aria-label={`Referência: ${p.name}`}
+                title={p.name}
+                onClick={() => onPoiSelect?.(p)}
+              >
+                <MapPin size={15} />
+              </button>
+            </MapMarker>
+          ))}
+          {editorPosition && (
+            <MapMarker map={map} point={editorPosition}>
+              <span
+                className="student-marker"
+                title={`Minha localização · precisão ${Math.round(editorPosition.accuracy)} m`}
+                aria-label="Minha localização no editor"
+              >
+                <UserRound size={17} />
+              </span>
+            </MapMarker>
+          )}
           {showStops &&
             [...uniqueStops.values()].map(({ stop, number }) => (
               <MapMarker
@@ -551,14 +595,16 @@ export default function MapView({
       <div className="map-tag">
         <div className="map-kicker">
           <Route size={13} />
-          {onPick ? "EDITOR DE PARADAS" : "MAPA DA VIAGEM"}
+          {editor || onPick ? "EDITOR DE PARADAS" : "MAPA DA VIAGEM"}
         </div>
         <strong>
           {onPick
             ? "Clique para adicionar uma parada"
-            : current
-              ? current.label
-              : routes[0]?.name || "Nenhuma rota"}
+            : editor
+              ? "Explorar o mapa"
+              : current
+                ? current.label
+                : routes[0]?.name || "Nenhuma rota"}
         </strong>
         <span>
           {current
@@ -593,7 +639,7 @@ export default function MapView({
           </small>
         )}
       </div>
-      {map && <MapSearch onCenter={center} />}
+      {map && <MapSearch onCenter={center} onLocate={onLocate} />}
       {!map && (
         <div className="map-loading">
           <MapPin size={25} />
@@ -636,7 +682,7 @@ export default function MapView({
       </div>
       {expanded && (
         <div className="map-options">
-          {!onPick && (
+          {!editor && !onPick && (
             <>
               <button
                 type="button"

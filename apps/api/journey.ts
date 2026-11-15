@@ -22,6 +22,7 @@ export async function schoolRoutes(db: DB, orgId: string) {
         eq(s.routes.orgId, orgId),
         eq(s.routes.published, true),
         eq(s.routes.active, true),
+        eq(s.routes.approval, "approved"),
         isNull(s.routes.archivedAt),
       ),
     )

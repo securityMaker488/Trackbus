@@ -50,6 +50,20 @@
       "when": 1794342897855,
       "tag": "0006_archive_routes",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794660000000,
+      "tag": "0007_route_approval",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794690000000,
+      "tag": "0008_route_geometry_metadata",
+      "breakpoints": true
     }
   ]
 }

@@ -11,6 +11,7 @@ import {
   AppState,
   Image,
   Alert,
+  Linking,
 } from "react-native";
 import * as Battery from "expo-battery";
 import logo from "./assets/icon.png";
@@ -470,6 +471,28 @@ export default function App() {
               />
             </View>
           )}
+          <Action
+            label="Criar ou revisar rotas"
+            disabled={busy || !!active}
+            onPress={() =>
+              exec(async () => {
+                const session = await readSession();
+                if (!session) throw Error("Conecte o aparelho novamente.");
+                const result = await request<{ code: string }>(
+                  "/driver/editor-link",
+                  {},
+                );
+                await Linking.openURL(
+                  session.origin +
+                    "/#/motorista?codigo=" +
+                    encodeURIComponent(result.code),
+                );
+                setMessage(
+                  "Editor aberto no navegador. Salve seu rascunho e envie para aprovação.",
+                );
+              })
+            }
+          />
           <Action
             label="Desconectar aparelho"
             disabled={busy}

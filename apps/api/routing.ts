@@ -34,7 +34,7 @@ export async function calculateRoute(
   url.pathname = "/route";
   const response = await transport(url, {
     method: "POST",
-    redirect: "error",
+    redirect: "manual",
     headers: {
       "Content-Type": "application/json",
       "User-Agent": "TrackBus/0.1 (institutional route planner)",

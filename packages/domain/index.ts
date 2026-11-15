@@ -9,7 +9,7 @@ export type TripStatus =
   | "completed"
   | "cancelled";
 export type Point = { lat: number; lng: number };
-export type Stop = Point & { id: string; name: string; dwellSeconds: number };
+export type Stop = Point & { id: string; name: string; dwellSeconds: number; reference?: {id: string; name: string; source: string} };
 export type Itinerary = {
   name: string;
   stops: Stop[];

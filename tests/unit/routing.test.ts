@@ -33,7 +33,7 @@ it("valida contrato Valhalla OSRM GeoJSON sem usar servidor público", async () 
   const payload = JSON.parse(String(options.body));
   expect(payload.format).toBe("osrm");
   expect(payload.costing).toBe("pedestrian");
-  expect(options.redirect).toBe("error");
+  expect(options.redirect).toBe("manual");
 });
 it("rejeita HTTP e respostas inválidas", async () => {
   await expect(

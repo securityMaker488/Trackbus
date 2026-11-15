@@ -9,12 +9,12 @@ Somente dados fictícios. Notebook da gestão, Android arm64 autorizado, navegad
 3. A apresentação V7 começa sem rotas. Crie origem, paradas e destino ao vivo pelo mapa, salve e publique.
 4. Programe uma viagem em modo GPS real, com veículo e motorista disponíveis. Simulação usa outra viagem.
 5. Escolha um trecho seguro e confira cobertura caminhável; a área do Açude Velho em Campina possui grafo local. Confira paradas e limite de espera até 300s.
-6. Configurações → Conectar o motorista: gerar código, instalar APK V7 e parear com a origem HTTPS. Confirmar atribuição da viagem.
+6. Configurações → Conectar o motorista: gerar código, instalar APK 7.1 e parear com a origem HTTPS. Confirmar atribuição da viagem.
 7. Abrir /#/participar no segundo navegador, informar apelido e escola.
 
 ## Apresentação
 
-1. Em Rotas e paradas → Criar rota, preencher nome/turno/horário, clicar origem/paradas/destino, nomear, salvar.
+1. Em Rotas e paradas → Criar rota, usar os nomes automáticos, clicar origem/paradas/destino e salvar. Turno/horário e nomes podem ser ajustados.
 2. Recarregar a página, abrir edição para confirmar coordenadas e IDs persistidos; publicar para alunos.
 3. No navegador do aluno, buscar e escolher a nova rota/parada; favoritar e salvar.
 4. Para demonstração GPS, programar viagem com motorista/veículo disponíveis. No Driver, confirmar segurança e tocar **Iniciar rota com GPS**.
@@ -32,4 +32,13 @@ Sem internet não há sincronização entre aparelhos, ainda que cálculo local 
 
 ## Ensaio adicional de progresso e permanência
 
-Com o Driver6.1, iniciar GPS em viagem atribuída. O mapa do aluno deve manter o marcador na posição recebida e diminuir a linha amarela restante. Estacionar em segurança junto a uma parada configurada, manter GPS/internet e aguardar pelo menos2min de leituras contínuas: deve aparecer “Aguardando no ponto”. Movimentar-se novamente, ou interromper a viagem: a indicação deve desaparecer. Aguardar5min continua sendo ação manual separada. Conferir que a ausência de sinal jamais confirma a permanência automaticamente. Registrar fabricante/Android, permissões, bateria, duração e resultado do bloqueio de tela; este ensaio físico ainda não foi executado.
+Com o Driver 7.1, iniciar GPS em viagem atribuída. O mapa do aluno deve manter o marcador na posição recebida e diminuir a linha amarela restante. Estacionar em segurança junto a uma parada configurada, manter GPS/internet e aguardar pelo menos2min de leituras contínuas: deve aparecer “Aguardando no ponto”. Movimentar-se novamente, ou interromper a viagem: a indicação deve desaparecer. Aguardar5min continua sendo ação manual separada. Conferir que a ausência de sinal jamais confirma a permanência automaticamente. Registrar fabricante/Android, permissões, bateria, duração e resultado do bloqueio de tela; este ensaio físico ainda não foi executado.
+
+
+## Mostrar o novo editor e a colaboração
+
+1. “Minha localização” pede autorização; mostrar precisão e conferir a via. Pode usar a posição como origem.
+2. Buscar referências na região, filtrar Bancos ou Escolas, escolher um local disponível e “Adicionar parada próxima”. Tocar na via e confirmar a sugestão “Próximo a…”. Se a referência não existir, continuar com nome automático.
+3. Criar cinco pontos, mostrar Explorar mapa, desfazer/refazer e reordenação. Pré-visualizar vias e explicar qualquer aviso de cobertura.
+4. No Driver conectado, abrir “Criar ou revisar rotas”, salvar outro rascunho e enviar para aprovação. Na gestão, revisar, aprovar e publicar. No aluno, atualizar e escolher a nova rota.
+5. Arquivar somente as rotas descartáveis criadas no ensaio; não apagar dados de terceiros. Voltar ao roteiro GPS/avisos acima.

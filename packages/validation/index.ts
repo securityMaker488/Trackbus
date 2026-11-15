@@ -8,6 +8,14 @@ export const stopSchema = z
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180),
     dwellSeconds: z.number().int().min(0).max(300),
+    reference: z
+      .object({
+        id: z.string().max(100),
+        name: z.string().min(1).max(100),
+        source: z.literal("OpenStreetMap"),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export const routeSchema = z
@@ -21,6 +29,7 @@ export const routeSchema = z
       .default(""),
     stops: z.array(stopSchema).min(2).max(50),
     active: z.boolean().default(true),
+    expectedVersion: z.number().int().positive().optional(),
   })
   .strict()
   .superRefine((r, c) => {

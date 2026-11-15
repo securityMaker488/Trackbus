@@ -16,7 +16,7 @@ Identidade institucional vem de JWT Cloudflare Access verificado no modo própri
 | POST / PUT | /vehicles, /vehicles/:id                                      | Admin; name, plate, model, year, capacity, status                                                                   |
 | POST / PUT | /drivers, /drivers/:id                                        | Admin; name, contact, userId, status                                                                                |
 | POST / PUT | /students, /students/:id                                      | Cadastro administrativo legado; entrada da feira usa journey/join                                                   |
-| POST / PUT | /routes, /routes/:id                                          | Admin; name, description, shift, departureTime HH:mm ou vazio, stops, active                                        |
+| POST / PUT | /routes, /routes/:id                                          | Admin ou motorista em rascunho próprio; name, description, shift, departureTime, stops, active, expectedVersion                                        |
 | POST       | /routes/:id/visibility                                        | Admin; {published:boolean}                                                                                          |
 | POST       | /routes/:id/calculate                                         | Admin; recalcula vias com rede local ou Valhalla configurado                                                        |
 | GET        | /routes/:id/versions                                          | Admin; versões preservadas                                                                                          |
@@ -57,3 +57,16 @@ Portal legado de responsável mantém `POST /walking` com {tripId,studentId,lat,
 400 JSON inválido; 401 credencial inválida; 403 papel/origem; 404 recurso fora do escopo; 409 conflito operacional; 422 validação; 429 limite; 503 serviço indisponível. Não existe endpoint genérico /gps nem /demo/reset.
 
 V6.1: `/journey/state` retorna `progress` da viagem visível; `/driver/trips` inclui progresso apenas nas viagens atribuídas. `/state.locations[].progress` segue autorização da viagem. Campos: alongMeters, totalMeters, observedAt, reliable, offRoute, stopId, stationarySince, anchor e waiting. Estado velho/interrompido nunca retorna waiting atual. Nenhum endpoint aceita progresso fornecido pelo cliente; derivado exclusivamente da posição validada.
+
+## Editor V7.1
+
+- `GET /geo/pois?lat=&lng=&radius=&category=`: admin/motorista; raio de 100..3000 m (UI 1500), até 40 POIs, 30 leituras/min por identidade. category=all ou chave de packages/shared/pois.ts. Retorna pontos, distância do centro, fonte/data, cobertura e truncated; vazio não é erro.
+- `POST /routes/preview`: mesmo corpo validado de criação; calcula caminho sem salvar. available=false é um rascunho esquemático, sem ETA inventado.
+- `POST /routes/:id/submit {version}`: motorista, apenas rota própria draft/rejected; torna pending e não publicada.
+- `POST /routes/:id/review {version,decision,note}`: admin da escola, somente pending; decision approved/rejected; devolução exige justificativa de 5..500 caracteres. Não publica automaticamente.
+- `POST /routes/:id/visibility {published}`: admin; publicação exige aprovação.
+- `POST /driver/editor-link {}`: Bearer de aparelho ativo; retorna code aleatório de uso único válido por 60s, até 5 emissões/min. App abre o fragmento /#/motorista?codigo=…; o cliente remove o fragmento antes da troca.
+- `POST /driver/web-exchange {code}`: Origin exato/JSON; consome código e emite cookie tb_driver HttpOnly/Secure/Strict por até 1h, nunca além da sessão nativa. 10 trocas/min por IP. Não retorna o token nativo.
+- `POST /driver/editor-logout {}`: encerra somente o acesso ao editor. Revogar o aparelho também invalida seus editores.
+
+Sessão editor acessa apenas me/state, POIs e edição/envio de rotas próprias; não transmite GPS, não gerencia usuários e não troca papel. expectedVersion impede salvar sobre edição mais recente. Approval/createdBy/published não são aceitos do formulário de criação. Viagens só podem ser programadas sobre rotas aprovadas.

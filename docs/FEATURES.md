@@ -1,4 +1,12 @@
-# Auditoria funcional V6
+# Funcionalidades e histórico de auditoria
+
+## Atualização V7.1 — 14/11/2026
+
+Editor por clique/touch com exploração segura, nomes automáticos, desfazer/refazer, confirmação de limpeza, ordem, prévia e persistência. Localização consentida com precisão e opção de origem. Catálogo OSM de 4.707 referências da Paraíba servido por proximidade; nomes sugeridos e confirmados. Motorista cria/envia rascunhos, admin aprova/devolve/publica; isolamento e versão são validados na API/D1. Driver 7.1 compilado, com entrada temporária no editor.
+
+Cloudflare próprio publicado com Access real validado, D1 e sessões independentes de aluno. Resultados atuais em TESTING.md/CLOUDFLARE.md. Persistem limitações de GPS físico, cobertura de roteamento fora dos recortes e push sem VAPID. Os estados abaixo registram a auditoria anterior, não substituem esta atualização.
+
+## Histórico V6
 
 Auditoria iniciada em 9/11/2026 sobre main ce6bc1f. GitHub e checkout apontavam ao mesmo commit, sem mudanças pendentes. Histórico de merge com a documentação do GitHub preservado. Backup Git bundle e branch recovery/pre-v6-20261109 criados antes das alterações.
 

@@ -8,7 +8,14 @@ const normalize = (s: string) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase();
-export function MapSearch({ onCenter }: { onCenter: (point: Point) => void }) {
+export type EditorFix = Point & { accuracy: number; timestamp: number };
+export function MapSearch({
+  onCenter,
+  onLocate,
+}: {
+  onCenter: (point: Point) => void;
+  onLocate?: (fix: EditorFix) => void;
+}) {
   const [query, setQuery] = useState(""),
     [results, setResults] = useState<
       { id: string; name: string; lat: number; lng: number }[]
@@ -48,9 +55,18 @@ export function MapSearch({ onCenter }: { onCenter: (point: Point) => void }) {
     setBusy(true);
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        onCenter({ lat: p.coords.latitude, lng: p.coords.longitude });
+        const fix = {
+          lat: p.coords.latitude,
+          lng: p.coords.longitude,
+          accuracy: p.coords.accuracy,
+          timestamp: p.timestamp,
+        };
+        onCenter(fix);
+        onLocate?.(fix);
         setBusy(false);
-        setMessage("Mapa centralizado na posição autorizada.");
+        setMessage(
+          `Sua posição · precisão aproximada de ${Math.round(fix.accuracy)} m. Usada somente neste mapa.`,
+        );
       },
       () => {
         setBusy(false);
@@ -82,8 +98,8 @@ export function MapSearch({ onCenter }: { onCenter: (point: Point) => void }) {
         </button>
         <button
           type="button"
-          aria-label="Centralizar no meu GPS"
-          title="Centralizar no meu GPS"
+          aria-label="Minha localização"
+          title="Minha localização"
           disabled={busy}
           onClick={locate}
         >

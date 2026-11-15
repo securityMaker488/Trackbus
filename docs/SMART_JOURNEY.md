@@ -1,6 +1,6 @@
 # Smart Journey
 
-Entrada fictícia por nome/apelido e escola demo aberta, sem matrícula/CPF/e-mail. Rotas ativas e publicadas da própria escola aparecem independentemente de vínculo aluno-rota. Filtros por nome/turno, horários de referência, cartões de seleção, parada e favoritos persistem no D1 em journey_preferences. Favorito não é confirmação de vaga.
+Entrada fictícia por nome/apelido e escola demo aberta, sem matrícula/CPF/e-mail. Rotas aprovadas, ativas e publicadas da própria escola aparecem independentemente de vínculo aluno-rota. Filtros por nome/turno, horários de referência, cartões de seleção, parada e favoritos persistem no D1 em journey_preferences. Favorito não é confirmação de vaga.
 
 Smart Arrival, em packages/domain, projeta GPS sobre a geometria viária e calcula distância até a parada pela sequência do trajeto. Usa velocidade recente, paradas intermediárias e o maior prazo entre atraso/espera. Não soma esses prazos duas vezes. Faixa aproximada 0,8..1,3 do tempo calculado; não é modelo estatístico calibrado com trânsito. Sem velocidade confiável, posição recente, percurso viário ou previsão de retomada, informa indisponibilidade.
 

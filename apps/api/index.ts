@@ -18,12 +18,15 @@ import {
   departure,
   type Role,
   type Position,
+  type Stop,
 } from "../../packages/domain";
 import { seedDemo } from "./seed";
 import { verifyAccessIdentity, type AccessConfig } from "./cloudflare-identity";
 import { trackJourney, visibleProgress } from "../../packages/domain/tracking";
 import { calculateRoute } from "./routing";
 import { calculateLocalRoute } from "../../packages/geodata";
+import { nearbyPois } from "./pois";
+import { poiCategories } from "../../packages/shared/pois";
 import { deliver, expireWaits, validEndpoint } from "./notifications";
 import { preparePresentation } from "./presentation";
 import { digest as sha, opaque, limit, session } from "./access";
@@ -42,6 +45,7 @@ type Actor = {
   name: string;
   demo: boolean;
   visitor?: boolean;
+  editor?: boolean;
 };
 export type Bindings = AccessConfig & {
   DB: D1Database;
@@ -81,6 +85,25 @@ const day = (ms: number) =>
     month: "2-digit",
     day: "2-digit",
   }).format(ms);
+async function planBus(c: C, stops: Stop[]) {
+  const local = calculateLocalRoute(stops, "bus");
+  if (local) return local;
+  if (c.env.VALHALLA_URL) {
+    try {
+      return await calculateRoute(c.env.VALHALLA_URL, stops, "bus");
+    } catch {
+      /* Save an explicitly schematic draft if the provider is unavailable. */
+    }
+  }
+  return null;
+}
+function geometryOrigin(plan: object | null) {
+  return !plan
+    ? "schematic"
+    : "source" in plan && plan.source === "osm-local"
+      ? "osm-local"
+      : "institutional";
+}
 async function payload<T extends z.ZodTypeAny>(
   c: C,
   schema: T,
@@ -238,6 +261,16 @@ async function routeRef(c: C, id: string) {
     );
   if (!r) fail(422, "Rota inválida para esta instituição");
   return r;
+}
+function editRoutePermission(c: C, route: typeof s.routes.$inferSelect) {
+  roles(c, "admin", "driver");
+  const a = c.get("actor");
+  if (
+    a.role === "driver" &&
+    (route.createdBy !== a.userId ||
+      !["draft", "rejected"].includes(route.approval))
+  )
+    fail(403, "Edite apenas seus rascunhos ou rotas devolvidas pela gestão.");
 }
 async function vehicleRef(c: C, id: string) {
   const [r] = await c
@@ -429,13 +462,65 @@ app.post("/driver/exchange", async (c) => {
   });
   return c.json({ token, expiresIn: 28800 });
 });
+app.post("/driver/web-exchange", async (c) => {
+  const db = c.get("db"),
+    { code } = await payload(
+      c,
+      z.object({ code: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
+    );
+  await limit(
+    db,
+    "editor-exchange:" +
+      (await sha(c.req.header("CF-Connecting-IP") || "local")),
+    10,
+  );
+  const [handoff] = await db
+    .delete(s.accessSessions)
+    .where(
+      and(
+        eq(s.accessSessions.id, await sha(code)),
+        eq(s.accessSessions.kind, "handoff"),
+        gt(s.accessSessions.expires, Date.now()),
+      ),
+    )
+    .returning();
+  if (!handoff?.parentId)
+    fail(401, "Link expirado. Abra o editor novamente pelo Driver.");
+  const [parent] = await db
+    .select()
+    .from(s.accessSessions)
+    .where(
+      and(
+        eq(s.accessSessions.id, handoff.parentId),
+        eq(s.accessSessions.kind, "device"),
+        gt(s.accessSessions.expires, Date.now()),
+      ),
+    );
+  if (!parent) fail(401, "Acesso do aparelho encerrado.");
+  const token = opaque(),
+    expires = Math.min(parent.expires, Date.now() + 3600000);
+  await db
+    .insert(s.accessSessions)
+    .values({ ...handoff, id: await sha(token), kind: "editor", expires });
+  deleteCookie(c, "tb_visitor", { path: "/" });
+  deleteCookie(c, "tb_demo", { path: "/" });
+  setCookie(c, "tb_driver", token, {
+    path: "/",
+    httpOnly: true,
+    secure: true,
+    sameSite: "Strict",
+    maxAge: Math.floor((expires - Date.now()) / 1000),
+  });
+  return c.json({ ok: true });
+});
 app.use("*", async (c, next) => {
   const db = c.get("db"),
     bearer = c.req.header("Authorization"),
-    visitor = getCookie(c, "tb_visitor");
-  if (bearer || visitor) {
-    const kind = bearer ? "device" : "visitor",
-      credential = bearer?.replace(/^Bearer /, "") || visitor || "";
+    visitor = getCookie(c, "tb_visitor"),
+    editor = getCookie(c, "tb_driver");
+  if (bearer || visitor || editor) {
+    const kind = bearer ? "device" : visitor ? "visitor" : "editor",
+      credential = bearer?.replace(/^Bearer /, "") || visitor || editor || "";
     const a = await session(db, credential, kind);
     if (!a) fail(401, "Sessão expirada. Entre novamente.");
     const path = c.req.path,
@@ -448,9 +533,20 @@ app.use("*", async (c, next) => {
               "/api/journey/select",
               "/api/journey/walk",
             ].includes(path)
-          : /^\/api\/(driver\/(trips|incidents|revoke)|trips\/[^/]+\/(status|location|wait)|notices|incidents\/[^/]+\/resolve)$/.test(
-              path,
-            );
+          : kind === "editor"
+            ? [
+                "/api/me",
+                "/api/state",
+                "/api/geo/pois",
+                "/api/routes",
+                "/api/routes/preview",
+                "/api/driver/editor-logout",
+              ].includes(path) ||
+              /^\/api\/routes\/[^/]+\/(submit|calculate)$/.test(path) ||
+              (c.req.method === "PUT" && /^\/api\/routes\/[^/]+$/.test(path))
+            : /^\/api\/(driver\/(trips|incidents|revoke|editor-link)|trips\/[^/]+\/(status|location|wait)|notices|incidents\/[^/]+\/resolve)$/.test(
+                path,
+              );
     if (!permitted && !(kind === "visitor" && path === "/api/journey/push"))
       fail(403, "Ação fora dos limites desta sessão");
     c.set("identity", a.userId);
@@ -706,6 +802,8 @@ app.post("/routes/:id/visibility", async (c) => {
   roles(c, "admin");
   const r = await routeRef(c, c.req.param("id")),
     p = await payload(c, z.object({ published: z.boolean() }).strict());
+  if (p.published && r.approval !== "approved")
+    fail(409, "Aprove a rota antes de publicar.");
   await c.get("db").update(s.routes).set(p).where(eq(s.routes.id, r.id));
   await log(c, "route_visibility", r.id);
   return c.json({ ok: true });
@@ -804,6 +902,49 @@ app.get("/driver/trips", async (c) => {
       ),
     })),
   );
+});
+app.post("/driver/editor-link", async (c) => {
+  roles(c, "driver");
+  const credential = c.req.header("Authorization")?.replace(/^Bearer /, "");
+  if (!credential) fail(403, "Abra este recurso pelo aplicativo autorizado.");
+  const db = c.get("db"),
+    parentId = await sha(credential);
+  await limit(db, "editor-link:" + parentId, 5);
+  const [parent] = await db
+    .select()
+    .from(s.accessSessions)
+    .where(
+      and(
+        eq(s.accessSessions.id, parentId),
+        eq(s.accessSessions.kind, "device"),
+        gt(s.accessSessions.expires, Date.now()),
+      ),
+    );
+  if (!parent) fail(401, "Sessão expirada.");
+  const code = opaque();
+  await db.insert(s.accessSessions).values({
+    ...parent,
+    id: await sha(code),
+    kind: "handoff",
+    parentId,
+    expires: Math.min(parent.expires, Date.now() + 60000),
+  });
+  return c.json({ code });
+});
+app.post("/driver/editor-logout", async (c) => {
+  const token = getCookie(c, "tb_driver");
+  if (token)
+    await c
+      .get("db")
+      .delete(s.accessSessions)
+      .where(
+        and(
+          eq(s.accessSessions.id, await sha(token)),
+          eq(s.accessSessions.kind, "editor"),
+        ),
+      );
+  deleteCookie(c, "tb_driver", { path: "/" });
+  return c.json({ ok: true });
 });
 app.post("/driver/revoke", async (c) => {
   roles(c, "driver");
@@ -1075,8 +1216,13 @@ app.get("/state", async (c) => {
     routes: admin
       ? rs
       : a.role === "student"
-        ? rs.filter((r) => r.published && r.active)
-        : rs.filter((r) => routeIds.has(r.id)),
+        ? rs.filter((r) => r.published && r.active && r.approval === "approved")
+        : rs.filter(
+            (r) =>
+              routeIds.has(r.id) ||
+              r.createdBy === a.userId ||
+              r.approval === "approved",
+          ),
     students: visibleStudents,
     trips: ts,
     locations: visibleLocations,
@@ -1213,12 +1359,55 @@ app.put("/students/:id", async (c) => {
   await log(c, "student_updated", changed[0].id);
   return c.json({ ok: true });
 });
+app.get("/geo/pois", async (c) => {
+  roles(c, "admin", "driver");
+  const parsed = z
+    .object({
+      lat: z.coerce.number().min(-90).max(90),
+      lng: z.coerce.number().min(-180).max(180),
+      radius: z.coerce.number().int().min(100).max(3000).default(1500),
+      category: z.string().default("all"),
+    })
+    .strict()
+    .safeParse(c.req.query());
+  if (
+    !parsed.success ||
+    (parsed.data.category !== "all" &&
+      !Object.hasOwn(poiCategories, parsed.data.category))
+  )
+    fail(422, "Região ou categoria inválida");
+  await limit(c.get("db"), "poi:" + c.get("actor").userId, 30);
+  return c.json(
+    nearbyPois(parsed.data, parsed.data.radius, parsed.data.category),
+  );
+});
+app.post("/routes/preview", async (c) => {
+  roles(c, "admin", "driver");
+  const { stops } = await payload(c, v.routeSchema);
+  const local = calculateLocalRoute(stops, "bus");
+  if (local) return c.json({ available: true, ...local });
+  if (c.env.VALHALLA_URL) {
+    try {
+      return c.json({
+        available: true,
+        ...(await calculateRoute(c.env.VALHALLA_URL, stops, "bus")),
+      });
+    } catch {
+      /* Keep editing possible without a routing provider. */
+    }
+  }
+  return c.json({
+    available: false,
+    message:
+      "Trajeto esquemático. Não foi encontrada uma via conectada na cobertura disponível. Você pode salvar e revisar depois.",
+  });
+});
 app.post("/routes", async (c) => {
-  roles(c, "admin");
+  roles(c, "admin", "driver");
   const data = await payload(c, v.routeSchema),
     id = uuid(),
     orgId = c.get("actor").orgId,
-    planned = calculateLocalRoute(data.stops, "bus"),
+    planned = await planBus(c, data.stops),
     geometry =
       planned?.geometry ??
       data.stops.map((st) => [st.lng, st.lat] as [number, number]),
@@ -1232,7 +1421,20 @@ app.post("/routes", async (c) => {
     c
       .get("db")
       .insert(s.routes)
-      .values({ ...data, id, orgId, geometry, routed: snapshot.routed }),
+      .values({
+        ...data,
+        id,
+        orgId,
+        geometry,
+        routed: snapshot.routed,
+        distanceMeters: planned?.meters ?? null,
+        geometrySource: geometryOrigin(planned),
+        createdBy: c.get("actor").userId,
+        approval: c.get("actor").role === "admin" ? "approved" : "draft",
+        published: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }),
     c.get("db").insert(s.routeVersions).values({
       id: uuid(),
       orgId,
@@ -1307,19 +1509,22 @@ app.post("/routes/:id/archive", async (c) => {
   return c.json({ ok: true });
 });
 app.put("/routes/:id", async (c) => {
-  roles(c, "admin");
+  roles(c, "admin", "driver");
   const data = await payload(c, v.routeSchema),
     r = await routeRef(c, c.req.param("id")),
     unchanged =
       JSON.stringify(data.stops.map((st) => [st.id, st.lat, st.lng])) ===
       JSON.stringify(r.stops.map((st) => [st.id, st.lat, st.lng])),
-    planned = calculateLocalRoute(data.stops, "bus"),
+    planned = await planBus(c, data.stops),
     geometry =
       unchanged && r.routed
         ? r.geometry
         : (planned?.geometry ??
           data.stops.map((st) => [st.lng, st.lat] as [number, number])),
     routed = (unchanged && r.routed) || !!planned;
+  editRoutePermission(c, r);
+  if (data.expectedVersion !== undefined && data.expectedVersion !== r.version)
+    fail(409, "Rota atualizada em outro dispositivo. Reabra o editor.");
   const assigned = await c
     .get("db")
     .select()
@@ -1331,8 +1536,27 @@ app.put("/routes/:id", async (c) => {
     c
       .get("db")
       .update(s.routes)
-      .set({ ...data, geometry, routed, version: r.version + 1 })
-      .where(eq(s.routes.id, r.id)),
+      .set({
+        ...data,
+        geometry,
+        routed,
+        distanceMeters:
+          unchanged && r.routed ? r.distanceMeters : (planned?.meters ?? null),
+        geometrySource:
+          unchanged && r.routed ? r.geometrySource : geometryOrigin(planned),
+        version: r.version + 1,
+        updatedAt: Date.now(),
+        ...(c.get("actor").role === "driver"
+          ? { approval: "draft" as const, published: false }
+          : {}),
+      })
+      .where(
+        and(
+          eq(s.routes.id, r.id),
+          eq(s.routes.version, r.version),
+          eq(s.routes.approval, r.approval),
+        ),
+      ),
     c
       .get("db")
       .insert(s.routeVersions)
@@ -1351,6 +1575,74 @@ app.put("/routes/:id", async (c) => {
       }),
   ]);
   await log(c, "route_version_created", r.id);
+  return c.json({ ok: true });
+});
+app.post("/routes/:id/submit", async (c) => {
+  roles(c, "driver");
+  const r = await routeRef(c, c.req.param("id"));
+  editRoutePermission(c, r);
+  const p = await payload(
+    c,
+    z.object({ version: z.number().int().positive() }).strict(),
+  );
+  const changed = await c
+    .get("db")
+    .update(s.routes)
+    .set({
+      approval: "pending",
+      published: false,
+      submittedAt: Date.now(),
+      updatedAt: Date.now(),
+      reviewNote: "",
+    })
+    .where(
+      and(
+        eq(s.routes.id, r.id),
+        eq(s.routes.version, p.version),
+        inArray(s.routes.approval, ["draft", "rejected"]),
+      ),
+    )
+    .returning();
+  if (!changed.length) fail(409, "A rota mudou. Atualize antes de enviar.");
+  await log(c, "route_submitted", r.id);
+  return c.json({ ok: true });
+});
+app.post("/routes/:id/review", async (c) => {
+  roles(c, "admin");
+  const r = await routeRef(c, c.req.param("id"));
+  const p = await payload(
+    c,
+    z
+      .object({
+        version: z.number().int().positive(),
+        decision: z.enum(["approved", "rejected"]),
+        note: z.string().trim().max(500).default(""),
+      })
+      .strict(),
+  );
+  if (p.decision === "rejected" && p.note.length < 5)
+    fail(422, "Explique ao motorista o ajuste necessário.");
+  const changed = await c
+    .get("db")
+    .update(s.routes)
+    .set({
+      approval: p.decision,
+      reviewNote: p.note,
+      reviewedAt: Date.now(),
+      updatedAt: Date.now(),
+      published: false,
+    })
+    .where(
+      and(
+        eq(s.routes.id, r.id),
+        eq(s.routes.version, p.version),
+        eq(s.routes.approval, "pending"),
+      ),
+    )
+    .returning();
+  if (!changed.length)
+    fail(409, "Solicitação já analisada ou rota atualizada.");
+  await log(c, "route_" + p.decision, r.id);
   return c.json({ ok: true });
 });
 app.get("/routes/:id/versions", async (c) => {
@@ -1377,7 +1669,7 @@ app.post("/trips", async (c) => {
     vehicle = await vehicleRef(c, data.vehicleId),
     db = c.get("db"),
     a = c.get("actor");
-  if (!r.active || vehicle.status !== "available")
+  if (!r.active || r.approval !== "approved" || vehicle.status !== "available")
     fail(409, "Rota ou veículo indisponível");
   if (data.trackingMode === "simulation" && !a.demo)
     fail(403, "Simulador exclusivo da demonstração");
@@ -2212,8 +2504,9 @@ app.post("/walking", async (c) => {
   });
 });
 app.post("/routes/:id/calculate", async (c) => {
-  roles(c, "admin");
+  roles(c, "admin", "driver");
   const r = await routeRef(c, c.req.param("id"));
+  editRoutePermission(c, r);
   const local = calculateLocalRoute(r.stops, "bus");
   if (!local && !c.env.VALHALLA_URL)
     fail(422, "Paradas fora da cobertura ou sem via de ônibus conectada");
@@ -2234,8 +2527,21 @@ app.post("/routes/:id/calculate", async (c) => {
   await db.batch([
     db
       .update(s.routes)
-      .set({ geometry: route.geometry, routed: true, version: r.version + 1 })
-      .where(eq(s.routes.id, r.id)),
+      .set({
+        geometry: route.geometry,
+        routed: true,
+        distanceMeters: route.meters,
+        geometrySource: geometryOrigin(route),
+        version: r.version + 1,
+        updatedAt: Date.now(),
+      })
+      .where(
+        and(
+          eq(s.routes.id, r.id),
+          eq(s.routes.version, r.version),
+          eq(s.routes.approval, r.approval),
+        ),
+      ),
     db.insert(s.routeVersions).values({
       id: uuid(),
       orgId: r.orgId,
@@ -2292,7 +2598,9 @@ app.onError((err, c) => {
   if (
     message.includes("UNIQUE") ||
     message.includes("trip_conflict") ||
-    message.includes("active_conflict")
+    message.includes("active_conflict") ||
+    message.includes("route_version_conflict") ||
+    message.includes("route_not_approved")
   )
     return c.json(
       {

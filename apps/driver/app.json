@@ -2,7 +2,7 @@
   "expo": {
     "name": "TrackBus Driver",
     "slug": "trackbus-driver",
-    "version": "7.0.0",
+    "version": "7.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -11,14 +11,16 @@
       "supportsTablet": false
     },
     "android": {
-      "versionCode": 8,
+      "versionCode": 9,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.SYSTEM_ALERT_WINDOW"
       ],
       "package": "tech.isee.trackbus.driver",
-      "permissions": ["android.permission.POST_NOTIFICATIONS"],
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#090909"

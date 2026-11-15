@@ -154,8 +154,11 @@ test("cadastro persiste após recarregar; mapa, editor e páginas abrem", async 
     .fill("EET" + suffix[0] + "A" + suffix.slice(1));
   await page.getByLabel("Marca e modelo").fill("Teste Volare");
   await page.getByRole("button", { name: "Salvar registro" }).click();
+  await expect(page.getByRole("button", { name: "Salvar registro" })).toBeHidden();
+  await page.getByLabel("Buscar registros").fill("Veículo E2E " + suffix);
   await expect(page.getByText("Veículo E2E " + suffix)).toBeVisible();
   await page.reload();
+  await page.getByLabel("Buscar registros").fill("Veículo E2E " + suffix);
   await expect(page.getByText("Veículo E2E " + suffix)).toBeVisible();
   await page.getByRole("link", { name: "Rotas e paradas" }).click();
   await page.getByRole("button", { name: "Editar itinerário" }).first().click();

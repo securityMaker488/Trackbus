@@ -13,7 +13,9 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { useForm } from "react-hook-form";
-import { Dialog } from "radix-ui";
+import { Modal } from "./Modal";
+import { RouteEditor } from "./RouteEditor";
+import { DriverEditorEntry } from "./DriverEditorEntry";
 import { Toaster, toast } from "sonner";
 import { InstallApp } from "./InstallApp";
 import {
@@ -29,8 +31,6 @@ import {
   ChevronDown,
   ChevronRight,
   ArrowUpRight,
-  ArrowDown,
-  ArrowUp,
   Plus,
   Search,
   Clock,
@@ -45,7 +45,6 @@ import {
   Download,
   Navigation,
   Menu,
-  X,
   LogOut,
   Wrench,
   Wallet,
@@ -56,7 +55,6 @@ import {
   RefreshCw,
   Footprints,
   Copy,
-  Trash2,
   Satellite,
   CalendarCheck,
   Shield,
@@ -78,7 +76,6 @@ import {
   transitions,
   activeRoles,
   type Role,
-  type Stop,
   type Point,
   project,
 } from "../../packages/domain";
@@ -183,41 +180,7 @@ function Empty({
     </div>
   );
 }
-function Modal({
-  title,
-  subtitle,
-  children,
-  onClose,
-  wide = false,
-}: {
-  title: string;
-  subtitle?: string;
-  children: ReactNode;
-  onClose: () => void;
-  wide?: boolean;
-}) {
-  return (
-    <Dialog.Root open onOpenChange={(v) => !v && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="modal-overlay" />
-        <Dialog.Content className={`modal ${wide ? "wide" : ""}`}>
-          <div className="modal-heading">
-            <div>
-              <Dialog.Title>{title}</Dialog.Title>
-              <Dialog.Description>
-                {subtitle || "Preencha os dados abaixo."}
-              </Dialog.Description>
-            </div>
-            <Dialog.Close className="icon-button" aria-label="Fechar">
-              <X size={20} />
-            </Dialog.Close>
-          </div>
-          {children}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
+
 type Field = {
   name: string;
   label: string;
@@ -394,7 +357,7 @@ const menu: {
     label: "Rotas e paradas",
     icon: RouteIcon,
     section: "OPERAÇÃO",
-    roles: ["admin"],
+    roles: ["admin", "driver"],
   },
   {
     path: "/notices",
@@ -492,7 +455,11 @@ export default function TrackBus() {
     <QueryClientProvider client={queryClient}>
       {mounted ? (
         <HashRouter>
-          <App />
+          {window.location.hash.startsWith("#/motorista") ? (
+            <DriverEditorEntry />
+          ) : (
+            <App />
+          )}
         </HashRouter>
       ) : (
         <div className="splash">
@@ -673,7 +640,10 @@ function App() {
   const d = state.data,
     admin = d.actor.role === "admin",
     role = d.actor.role,
-    navItems = menu.filter((m) => m.roles.includes(role)),
+    navItems = menu.filter(
+      (m) =>
+        m.roles.includes(role) && (!d.actor.editor || m.path === "/routes"),
+    ),
     primaryNav = navItems.filter((m) => !extraPaths.has(m.path)),
     extraNav = navItems.filter((m) => extraPaths.has(m.path)),
     page = navItems.find((m) => m.path === location.pathname) || navItems[0],
@@ -687,7 +657,9 @@ function App() {
       value: v.id,
       label: `${v.name} · ${v.plate}`,
     })),
-    routeOpts = d.routes.map((r) => ({ value: r.id, label: r.name }));
+    routeOpts = d.routes
+      .filter((r) => r.approval === "approved")
+      .map((r) => ({ value: r.id, label: r.name }));
   const openTripForm = (selectedRouteId?: string) =>
     setForm({
       title: "Programar viagem",
@@ -1133,21 +1105,23 @@ function App() {
               <span />
               {state.error ? "Conexão perdida" : "Sincronizado"}
             </span>
-            <button
-              className="icon-button bell-button"
-              aria-label="Abrir avisos"
-              onClick={() => nav("/notices")}
-            >
-              <Bell size={20} />
-              {unread > 0 && <i />}
-            </button>
+            {!d.actor.editor && (
+              <button
+                className="icon-button bell-button"
+                aria-label="Abrir avisos"
+                onClick={() => nav("/notices")}
+              >
+                <Bell size={20} />
+                {unread > 0 && <i />}
+              </button>
+            )}
             <span className="top-divider" />
             <span className="avatar">
               {d.actor.name.slice(0, 2).toUpperCase()}
             </span>
             <div className="profile-select">
               <strong>{d.actor.name}</strong>
-              {d.organization.demo ? (
+              {d.organization.demo && !d.actor.editor ? (
                 <select
                   aria-label="Perfil de demonstração"
                   value={role}
@@ -1177,6 +1151,20 @@ function App() {
           </div>
         </header>
         <main>
+          {d.actor.editor && (
+            <div className="route-review">
+              Editor do motorista · Rascunhos sujeitos à aprovação.{" "}
+              <button
+                className="text-button"
+                onClick={async () => {
+                  await api("/driver/editor-logout", {});
+                  window.location.href = "/";
+                }}
+              >
+                Encerrar acesso ao editor
+              </button>
+            </div>
+          )}
           <div className="demo-banner">
             <FlaskConical size={15} />
             <strong>Modo demonstração</strong>
@@ -1226,7 +1214,9 @@ function App() {
                   </button>
                 </>
               ) : newActions[path] &&
-                (admin || (path === "/notices" && role === "driver")) ? (
+                (admin ||
+                  (["/notices", "/routes"].includes(path) &&
+                    role === "driver")) ? (
                 <button className="button primary" onClick={newActions[path]}>
                   <Plus size={17} />
                   {path === "/trips"
@@ -1617,49 +1607,128 @@ function App() {
                       </span>
                       <span>v{r.version}</span>
                     </div>
+                    <div className="route-review">
+                      <strong>
+                        {
+                          {
+                            draft: "Rascunho do motorista",
+                            pending: "Aguardando aprovação",
+                            approved: r.published
+                              ? "Publicada para os alunos"
+                              : "Aprovada · ainda não publicada",
+                            rejected: "Ajustes solicitados",
+                          }[r.approval]
+                        }
+                      </strong>
+                      {r.reviewNote && <p>{r.reviewNote}</p>}
+                      {admin && r.approval === "pending" && (
+                        <p>
+                          Revise o itinerário antes de aprovar. A publicação é
+                          uma ação separada.
+                        </p>
+                      )}
+                    </div>
                     <div className="route-card-actions">
-                      <button
-                        className="button primary"
-                        onClick={() => openTripForm(r.id)}
-                      >
-                        <Navigation size={16} /> Programar viagem
-                      </button>
-                      <button
-                        className="button secondary"
-                        onClick={() =>
-                          act(`/routes/${r.id}/visibility`, {
-                            published: !r.published,
-                          })
-                        }
-                      >
-                        {r.published
-                          ? "Ocultar dos alunos"
-                          : "Publicar para alunos"}
-                      </button>
-                      <button
-                        className="text-button"
-                        disabled={!d.routingConfigured}
-                        title={
-                          d.routingConfigured
-                            ? "Calcular pela rede local ou provedor institucional"
-                            : "Provedor geográfico não configurado"
-                        }
-                        onClick={() => act(`/routes/${r.id}/calculate`)}
-                      >
-                        {r.routed ? "Recalcular vias" : "Calcular vias"}
-                      </button>
-                      <button
-                        className="button secondary"
-                        onClick={() => setRouteEdit(r)}
-                      >
-                        Editar itinerário <ArrowUpRight size={15} />
-                      </button>
+                      {admin && r.approval === "approved" && (
+                        <>
+                          <button
+                            className="button primary"
+                            onClick={() => openTripForm(r.id)}
+                          >
+                            <Navigation size={16} /> Programar viagem
+                          </button>
+                          <button
+                            className="button secondary"
+                            onClick={() =>
+                              act(`/routes/${r.id}/visibility`, {
+                                published: !r.published,
+                              })
+                            }
+                          >
+                            {r.published
+                              ? "Ocultar dos alunos"
+                              : "Publicar para alunos"}
+                          </button>
+                        </>
+                      )}
+                      {(admin ||
+                        (r.createdBy === d.actor.userId &&
+                          ["draft", "rejected"].includes(r.approval))) && (
+                        <>
+                          <button
+                            className="button secondary"
+                            onClick={() => setRouteEdit(r)}
+                          >
+                            Editar itinerário <ArrowUpRight size={15} />
+                          </button>
+                          <button
+                            className="text-button"
+                            onClick={() => act(`/routes/${r.id}/calculate`)}
+                          >
+                            {r.routed ? "Recalcular vias" : "Calcular vias"}
+                          </button>
+                        </>
+                      )}
+                      {!admin &&
+                        r.createdBy === d.actor.userId &&
+                        ["draft", "rejected"].includes(r.approval) && (
+                          <button
+                            className="button primary"
+                            onClick={() =>
+                              act(`/routes/${r.id}/submit`, {
+                                version: r.version,
+                              })
+                            }
+                          >
+                            Enviar para aprovação
+                          </button>
+                        )}
+                      {admin && r.approval === "pending" && (
+                        <>
+                          <button
+                            className="button primary"
+                            onClick={() =>
+                              act(`/routes/${r.id}/review`, {
+                                version: r.version,
+                                decision: "approved",
+                              })
+                            }
+                          >
+                            Aprovar rota
+                          </button>
+                          <button
+                            className="button secondary"
+                            onClick={() =>
+                              setForm({
+                                title: "Solicitar ajustes",
+                                subtitle:
+                                  "Explique ao motorista o que precisa mudar.",
+                                path: `/routes/${r.id}/review`,
+                                fields: [
+                                  {
+                                    name: "note",
+                                    label: "Ajustes necessários",
+                                    type: "textarea",
+                                  },
+                                ],
+                                transform: (values) => ({
+                                  ...values,
+                                  version: r.version,
+                                  decision: "rejected",
+                                }),
+                              })
+                            }
+                          >
+                            Solicitar ajustes
+                          </button>
+                        </>
+                      )}
                       <button
                         className="icon-button"
                         title="Duplicar rota"
-                        onClick={async () => {
-                          await act("/routes", {
-                            name: `${r.name} · cópia`,
+                        onClick={() =>
+                          act("/routes", {
+                            name: `${r.name.slice(0, 90)} · cópia`,
                             description: r.description,
                             shift: r.shift,
                             departureTime: r.departureTime,
@@ -1668,24 +1737,26 @@ function App() {
                               id: crypto.randomUUID(),
                             })),
                             active: true,
-                          });
-                        }}
+                          })
+                        }
                       >
                         <Copy size={17} />
                       </button>
-                      <button
-                        className="text-button"
-                        onClick={async () => {
-                          if (
-                            window.confirm(
-                              "Remover esta rota dos painéis? As viagens de demonstração serão encerradas. O histórico será preservado.",
+                      {admin && (
+                        <button
+                          className="text-button"
+                          onClick={async () => {
+                            if (
+                              window.confirm(
+                                "Remover esta rota dos painéis? As viagens de demonstração serão encerradas. O histórico será preservado.",
+                              )
                             )
-                          )
-                            await act(`/routes/${r.id}/archive`, {});
-                        }}
-                      >
-                        Remover rota
-                      </button>
+                              await act(`/routes/${r.id}/archive`, {});
+                          }}
+                        >
+                          Remover rota
+                        </button>
+                      )}
                     </div>
                   </section>
                 ))}
@@ -2506,6 +2577,8 @@ function App() {
       {routeEdit && (
         <RouteEditor
           school={d.organization.name}
+          sequence={d.routes.length + 1}
+          driver={role === "driver"}
           route={routeEdit === "new" ? undefined : routeEdit}
           onClose={() => setRouteEdit(null)}
           onSaved={refresh}
@@ -2690,267 +2763,6 @@ function TripCard({
         </span>
       </div>
     </button>
-  );
-}
-function RouteEditor({
-  school,
-  route,
-  onClose,
-  onSaved,
-}: {
-  school: string;
-  route?: Route;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [name, setName] = useState(route?.name || ""),
-    [shift, setShift] = useState(route?.shift || "Manhã"),
-    [departureTime, setDepartureTime] = useState(route?.departureTime || ""),
-    [active, setActive] = useState(route?.active ?? true),
-    [description, setDescription] = useState(route?.description || ""),
-    [stops, setStops] = useState<Stop[]>(route?.stops || []),
-    [saving, setSaving] = useState(false);
-  const add = (p: Point) =>
-    setStops((s) => [
-      ...s,
-      {
-        ...p,
-        id: crypto.randomUUID(),
-        name: `Parada ${s.length + 1}`,
-        dwellSeconds: 45,
-      },
-    ]);
-  return (
-    <Modal
-      wide
-      title={route ? "Editar itinerário" : "Criar rota"}
-      subtitle="Clique na origem, nas paradas e no destino. Arraste os marcadores para ajustar. Vias locais conectadas são calculadas ao salvar."
-      onClose={onClose}
-    >
-      <div className="route-editor">
-        <div className="route-editor-form">
-          <label>
-            Escola
-            <input value={school} readOnly />
-          </label>
-          <label>
-            Nome da rota
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex.: Rota 04 · Campina Grande"
-            />
-          </label>
-          <label>
-            Turno
-            <select value={shift} onChange={(e) => setShift(e.target.value)}>
-              {["Manhã", "Tarde", "Noite"].map((x) => (
-                <option key={x}>{x}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Descrição
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-            />
-          </label>
-          <label>
-            Horário de referência
-            <input
-              type="time"
-              value={departureTime}
-              onChange={(e) => setDepartureTime(e.target.value)}
-            />
-          </label>
-          <label>
-            Situação
-            <select
-              value={active ? "active" : "inactive"}
-              onChange={(e) => setActive(e.target.value === "active")}
-            >
-              <option value="active">Ativa</option>
-              <option value="inactive">Inativa</option>
-            </select>
-          </label>
-          <small>
-            O horário da viagem será definido na programação. A primeira parada
-            é a origem; a última é o destino.
-          </small>
-          <div className="stops-heading">
-            <h3>
-              Paradas <span>{stops.length}</span>
-            </h3>
-            <button
-              className="text-button"
-              onClick={() =>
-                add({ lat: -7.2185 + stops.length * 0.001, lng: -35.8855 })
-              }
-            >
-              <Plus size={14} /> Manual
-            </button>
-          </div>
-          <div className="stop-editor-list">
-            {stops.map((s, i) => (
-              <div className="stop-edit" key={s.id}>
-                <span className="stop-index">{i + 1}</span>
-                <div>
-                  <input
-                    aria-label={`Nome da parada ${i + 1}`}
-                    value={s.name}
-                    onChange={(e) =>
-                      setStops(
-                        stops.map((p) =>
-                          p.id === s.id ? { ...p, name: e.target.value } : p,
-                        ),
-                      )
-                    }
-                  />
-                  <div className="coordinate-inputs">
-                    <input
-                      aria-label={`Latitude ${i + 1}`}
-                      type="number"
-                      step="any"
-                      value={s.lat}
-                      onChange={(e) =>
-                        setStops(
-                          stops.map((p) =>
-                            p.id === s.id
-                              ? { ...p, lat: Number(e.target.value) }
-                              : p,
-                          ),
-                        )
-                      }
-                    />
-                    <input
-                      aria-label={`Longitude ${i + 1}`}
-                      type="number"
-                      step="any"
-                      value={s.lng}
-                      onChange={(e) =>
-                        setStops(
-                          stops.map((p) =>
-                            p.id === s.id
-                              ? { ...p, lng: Number(e.target.value) }
-                              : p,
-                          ),
-                        )
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="stop-buttons">
-                  <button
-                    className="icon-button"
-                    title="Subir parada"
-                    disabled={i === 0}
-                    onClick={() => {
-                      const a = [...stops];
-                      [a[i - 1], a[i]] = [a[i], a[i - 1]];
-                      setStops(a);
-                    }}
-                  >
-                    <ArrowUp size={13} />
-                  </button>
-                  <button
-                    className="icon-button"
-                    title="Descer parada"
-                    disabled={i === stops.length - 1}
-                    onClick={() => {
-                      const a = [...stops];
-                      [a[i], a[i + 1]] = [a[i + 1], a[i]];
-                      setStops(a);
-                    }}
-                  >
-                    <ArrowDown size={13} />
-                  </button>
-                  <button
-                    className="icon-button"
-                    title="Excluir parada"
-                    onClick={() => setStops(stops.filter((p) => p.id !== s.id))}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <MapView
-          large
-          routes={
-            stops.length > 0
-              ? [
-                  {
-                    name,
-                    stops,
-                    geometry:
-                      route?.routed &&
-                      JSON.stringify(stops.map((s) => [s.id, s.lat, s.lng])) ===
-                        JSON.stringify(
-                          route.stops.map((s) => [s.id, s.lat, s.lng]),
-                        )
-                        ? route.geometry
-                        : stops.map((s) => [s.lng, s.lat]),
-                    routed:
-                      !!route?.routed &&
-                      JSON.stringify(stops.map((s) => [s.id, s.lat, s.lng])) ===
-                        JSON.stringify(
-                          route.stops.map((s) => [s.id, s.lat, s.lng]),
-                        ),
-                  },
-                ]
-              : []
-          }
-          onPick={add}
-          onMoveStop={(id, p) =>
-            setStops(stops.map((s) => (s.id === id ? { ...s, ...p } : s)))
-          }
-        />
-      </div>
-      <div className="form-actions">
-        <span className="muted">
-          {stops.length} paradas ·{" "}
-          {route ? `Nova versão: ${route.version + 1}` : "Versão inicial"}
-        </span>
-        <button className="button secondary" onClick={onClose}>
-          Cancelar
-        </button>
-        <button
-          className="button primary"
-          disabled={saving}
-          onClick={async () => {
-            setSaving(true);
-            try {
-              await api(
-                route ? `/routes/${route.id}` : "/routes",
-                {
-                  name,
-                  description,
-                  shift,
-                  departureTime,
-                  stops,
-                  active,
-                },
-                route ? "PUT" : "POST",
-              );
-              toast.success("Itinerário salvo");
-              onSaved();
-              onClose();
-            } catch (e) {
-              toast.error((e as Error).message);
-            } finally {
-              setSaving(false);
-            }
-          }}
-        >
-          {saving ? "Salvando…" : "Salvar itinerário"}
-          <Check size={16} />
-        </button>
-      </div>
-    </Modal>
   );
 }
 function TripDetail({

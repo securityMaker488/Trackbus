@@ -33,7 +33,7 @@ export async function limit(db: DB, bucket: string, max: number) {
 export async function session(
   db: DB,
   value: string,
-  kind: "visitor" | "device",
+  kind: "visitor" | "device" | "editor",
 ) {
   if (!/^[a-f0-9]{64}$/.test(value)) return null;
   const [row] = await db
@@ -47,12 +47,28 @@ export async function session(
       ),
     );
   if (!row) return null;
+  if (kind === "editor") {
+    if (!row.parentId) return null;
+    const [parent] = await db
+      .select()
+      .from(s.accessSessions)
+      .where(
+        and(
+          eq(s.accessSessions.id, row.parentId),
+          eq(s.accessSessions.kind, "device"),
+          gt(s.accessSessions.expires, Date.now()),
+          eq(s.accessSessions.subject, row.subject),
+          eq(s.accessSessions.orgId, row.orgId),
+        ),
+      );
+    if (!parent) return null;
+  }
   const [org] = await db
     .select()
     .from(s.organizations)
     .where(eq(s.organizations.id, row.orgId));
   if (!org || (kind === "visitor" && (!org.demo || !org.roomOpen))) return null;
-  if (kind === "device") {
+  if (kind === "device" || kind === "editor") {
     const [driver] = await db
       .select()
       .from(s.drivers)
@@ -87,5 +103,6 @@ export async function session(
     role: kind === "visitor" ? ("student" as const) : ("driver" as const),
     demo: org.demo,
     visitor: kind === "visitor",
+    editor: kind === "editor",
   };
 }
