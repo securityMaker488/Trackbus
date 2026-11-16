@@ -46,6 +46,17 @@ const palette = {
 const style: StyleSpecification = {
   version: 8,
   sources: {
+    carto: {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+      ],
+      tileSize: 256,
+      attribution:
+        '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">CARTO</a>',
+    },
     osm: {
       type: "raster",
       tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
@@ -63,12 +74,12 @@ const style: StyleSpecification = {
     {
       id: "streets",
       type: "raster",
-      source: "osm",
+      source: "carto",
       paint: {
-        "raster-saturation": -1,
-        "raster-brightness-min": 9 / 255,
-        "raster-brightness-max": 32 / 255,
-        "raster-contrast": 0.42,
+        "raster-saturation": -0.3,
+        "raster-brightness-min": 8 / 255,
+        "raster-brightness-max": 36 / 255,
+        "raster-contrast": 0.45,
       },
     },
   ],

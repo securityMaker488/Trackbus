@@ -23,7 +23,7 @@ import {
 import { seedDemo } from "./seed";
 import { verifyAccessIdentity, type AccessConfig } from "./cloudflare-identity";
 import { trackJourney, visibleProgress } from "../../packages/domain/tracking";
-import { calculateRoute } from "./routing";
+import { calculateRoute, searchPlaces } from "./routing";
 import { calculateLocalRoute } from "../../packages/geodata";
 import { nearbyPois } from "./pois";
 import {
@@ -1625,6 +1625,23 @@ app.get("/geo/pois", async (c) => {
   await limit(c.get("db"), "poi:" + c.get("actor").userId, 30);
   return c.json(
     nearbyPois(parsed.data, parsed.data.radius, parsed.data.category),
+  );
+});
+app.get("/geo/search", async (c) => {
+  roles(c, "admin", "driver");
+  const query = c.req.query("q");
+  if (!query || query.trim().length < 2)
+    return c.json([]);
+  await limit(c.get("db"), "geo-search:" + c.get("actor").userId, 30);
+  const results = await searchPlaces(query, 10);
+  return c.json(
+    results.map((r) => ({
+      id: String(r.id),
+      name: r.name,
+      lat: r.lat,
+      lng: r.lng,
+      type: r.type,
+    })),
   );
 });
 app.post("/routes/preview", async (c) => {

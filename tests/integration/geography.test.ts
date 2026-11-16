@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/d1";
 import { seedScenario } from "../fixtures/scenario";
-import { beforeAll, afterAll, it, expect } from "vitest";
+import { beforeAll, afterAll, it, expect, vi } from "vitest";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { readFileSync, readdirSync } from "node:fs";
 import api from "../../apps/api";
@@ -203,6 +203,47 @@ it("rejeita horário inválido e coordenadas inválidas sem gravar", async () =>
       .bind("Inválida")
       .first(),
   ).toBeNull();
+});
+it("busca geocoding via Nominatim para localidades fora da PB", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            place_id: 1,
+            display_name: "São Paulo, SP, Brasil",
+            lat: "-23.5505",
+            lon: "-46.6333",
+            type: "city",
+          },
+          {
+            place_id: 2,
+            display_name: "São Bernardo do Campo, SP, Brasil",
+            lat: "-23.6914",
+            lon: "-46.5644",
+            type: "city",
+          },
+        ]),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    ),
+  );
+  const response = await request("/geo/search?q=Sao+Paulo");
+  expect(response.status).toBe(200);
+  const data = (await response.json()) as {
+    id: string;
+    name: string;
+    lat: number;
+    lng: number;
+  }[];
+  expect(data).toHaveLength(2);
+  expect(data[0]).toMatchObject({
+    id: "1",
+    name: "São Paulo, SP, Brasil",
+    lat: -23.5505,
+    lng: -46.6333,
+  });
 });
 
 it("visitante marca aviso autorizado como lido e logout remove leitura e push", async () => {

@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import "./map-search.css";
 import { Search, LocateFixed } from "lucide-react";
@@ -6,7 +8,7 @@ import places from "../../packages/geodata/paraiba-places.json";
 const normalize = (s: string) =>
   s
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLocaleLowerCase();
 export type EditorFix = Point & { accuracy: number; timestamp: number };
 export function MapSearch({
@@ -18,15 +20,14 @@ export function MapSearch({
 }) {
   const [query, setQuery] = useState(""),
     [results, setResults] = useState<
-      { id: string; name: string; lat: number; lng: number }[]
+      { id: string; name: string; lat: number; lng: number; remote?: boolean }[]
     >([]),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false);
-  function search() {
+  async function search() {
     setMessage("");
-    const match = query
-      .trim()
-      .match(/^(-?\d+(?:\.\d+)?)\s*[,;]\s*(-?\d+(?:\.\d+)?)$/);
+    const trimmed = query.trim();
+    const match = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*[,;]\s*(-?\d+(?:\.\d+)?)$/);
     if (match) {
       const lat = Number(match[1]),
         lng = Number(match[2]);
@@ -38,14 +39,44 @@ export function MapSearch({
       setMessage("Coordenadas fora do intervalo válido.");
       return;
     }
-    const found = places.places
-      .filter((p) => normalize(p.name).includes(normalize(query.trim())))
+    const local = places.places
+      .filter((p) => normalize(p.name).includes(normalize(trimmed)))
       .slice(0, 12);
-    setResults(found);
-    if (!found.length)
-      setMessage(
-        "Cidade não encontrada. Use latitude, longitude para qualquer localidade.",
-      );
+    if (local.length) {
+      setResults(local);
+      return;
+    }
+    if (trimmed.length < 2) {
+      setResults([]);
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/geo/search?q=${encodeURIComponent(trimmed)}`, {
+        credentials: "same-origin",
+      });
+      if (r.ok) {
+        const remote = (await r.json()) as {
+          id: string;
+          name: string;
+          lat: number;
+          lng: number;
+        }[];
+        setResults(
+          remote.map((p) => ({ ...p, remote: true })),
+        );
+        if (!remote.length)
+          setMessage(
+            "Local não encontrado. Use latitude, longitude para qualquer localidade.",
+          );
+      } else {
+        setMessage("Não foi possível buscar. Tente coordenadas.");
+      }
+    } catch {
+      setMessage("Busca indisponível. Use latitude, longitude.");
+    } finally {
+      setBusy(false);
+    }
   }
   function locate() {
     if (!navigator.geolocation) {
@@ -59,7 +90,7 @@ export function MapSearch({
           lat: p.coords.latitude,
           lng: p.coords.longitude,
           accuracy: p.coords.accuracy,
-          timestamp: p.timestamp,
+          timestamp: Date.now(),
         };
         onCenter(fix);
         onLocate?.(fix);
@@ -86,10 +117,10 @@ export function MapSearch({
         }}
       >
         <input
-          aria-label="Buscar cidade ou coordenadas"
+          aria-label="Buscar local ou coordenadas"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Cidade na PB ou latitude, longitude"
+          placeholder="Buscar local ou latitude, longitude"
           minLength={2}
           required
         />
@@ -118,7 +149,8 @@ export function MapSearch({
                 setMessage("");
               }}
             >
-              {p.name} · PB
+              {p.name}
+              {p.remote ? "" : " · PB"}
             </button>
           ))}
           <small>{places.attribution}</small>

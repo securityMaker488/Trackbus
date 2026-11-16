@@ -22,6 +22,56 @@ const responseSchema = z.object({
     )
     .min(1),
 });
+const nominatimResultSchema = z.object({
+  place_id: z.number(),
+  display_name: z.string(),
+  lat: z.string(),
+  lon: z.string(),
+  type: z.string(),
+  importance: z.number().optional(),
+});
+const nominatimResponseSchema = z.array(nominatimResultSchema);
+
+/** Free geocoding via Nominatim (OSM). Rate-limited by client and result-count. */
+export async function searchPlaces(
+  query: string,
+  limit = 10,
+  transport: typeof fetch = fetch,
+): Promise<
+  { id: number; name: string; lat: number; lng: number; type: string }[]
+> {
+  if (!query.trim() || query.trim().length < 2) return [];
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", query.trim());
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("accept-language", "pt-BR");
+  url.searchParams.set("addressdetails", "0");
+  url.searchParams.set("namedetails", "0");
+  url.searchParams.set("extratags", "0");
+  url.searchParams.set("polygon_geojson", "0");
+  const response = await transport(url, {
+    headers: {
+      "User-Agent": "TrackBus/0.1 (institutional route planner; https://trackbus.app)",
+      Accept: "application/json",
+    },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) return [];
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength > 200_000) return [];
+  const parsed = nominatimResponseSchema.safeParse(
+    JSON.parse(new TextDecoder().decode(bytes)),
+  );
+  if (!parsed.success) return [];
+  return parsed.data.map((r) => ({
+    id: r.place_id,
+    name: r.display_name,
+    lat: Number(r.lat),
+    lng: Number(r.lon),
+    type: r.type,
+  }));
+}
 export async function calculateRoute(
   endpoint: string,
   points: Point[],

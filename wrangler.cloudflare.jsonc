@@ -22,7 +22,7 @@
     },
   ],
   "vars": {
-    "APP_ENV": "evaluation",
+    "APP_ENV": "production",
     "MAP_PROVIDER": "google",
     "GOOGLE_MAPS_MODE": "demo",
     "GOOGLE_MAPS_MAP_ID": "DEMO_MAP_ID",

@@ -143,7 +143,8 @@ test("cadastro persiste após recarregar; mapa, editor e páginas abrem", async 
         (img: HTMLImageElement) => img.complete && img.naturalWidth === 1254,
       ),
   ).toBe(true);
-  await expect(page.locator(".maplibregl-canvas")).toBeVisible();
+  const mapCanvas = page.locator(".maplibregl-canvas, .gm-style .gm-style-pbc");
+  await expect(mapCanvas.first()).toBeVisible();
   await expect(page.locator(".stop-marker").first()).toBeVisible();
   await page.getByRole("link", { name: "Veículos", exact: true }).click();
   await page.getByRole("button", { name: "Adicionar registro" }).click();
