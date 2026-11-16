@@ -84,6 +84,13 @@ function fail(
   throw new HTTPException(status, { message });
 }
 const uuid = () => crypto.randomUUID();
+function actorMapsConfig(c: C) {
+  const config = mapsConfig(c.env);
+  // Evaluation credentials must never serve a real institution.
+  return config.provider === "google" && config.demo && !c.get("actor").demo
+    ? ({ provider: "maplibre", googlePending: true } as const)
+    : config;
+}
 const roles = (c: C, ...allowed: Role[]) => {
   if (!allowed.includes(c.get("actor").role))
     fail(403, "Seu perfil não permite esta ação");
@@ -96,7 +103,7 @@ const day = (ms: number) =>
     day: "2-digit",
   }).format(ms);
 async function planBus(c: C, stops: Stop[]) {
-  if (mapsConfig(c.env).provider === "google") {
+  if (actorMapsConfig(c).provider === "google") {
     const key = googleRoutesKey(c.env);
     if (!key) return null;
     await limit(c.get("db"), "google-route:" + c.get("actor").orgId, 20);
@@ -737,7 +744,7 @@ app.use("*", async (c, next) => {
   }
   await next();
 });
-app.get("/maps/config", (c) => c.json(mapsConfig(c.env)));
+app.get("/maps/config", (c) => c.json(actorMapsConfig(c)));
 app.get("/me", async (c) => {
   const a = c.get("actor");
   return c.json(
@@ -945,7 +952,7 @@ app.post("/journey/walk", async (c) => {
       c.get("actor"),
       pos,
       c.env.VALHALLA_URL,
-      mapsConfig(c.env).provider === "google"
+      actorMapsConfig(c).provider === "google"
         ? googleRoutesKey(c.env)
         : undefined,
     ),

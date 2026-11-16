@@ -22,6 +22,10 @@
     },
   ],
   "vars": {
+    "APP_ENV": "evaluation",
+    "MAP_PROVIDER": "google",
+    "GOOGLE_MAPS_MODE": "demo",
+    "GOOGLE_MAPS_MAP_ID": "DEMO_MAP_ID",
     "AUTH_PROVIDER": "cloudflare-access",
     "ACCESS_TEAM_DOMAIN": "round-limit-693e.cloudflareaccess.com",
     "ACCESS_AUD": "95df41d8f7b10e7196a7f309c3cf922c20162e797793d0163322793f15844dbc",

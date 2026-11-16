@@ -2,7 +2,7 @@ import { beforeAll, afterAll, afterEach, it, expect, vi } from "vitest";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { readFileSync, readdirSync } from "node:fs";
 import { drizzle } from "drizzle-orm/d1";
-import api from "../../apps/api";
+import api, { type Bindings } from "../../apps/api";
 import type { State } from "../../packages/shared/types";
 import { expireGoogleGeometry } from "../../apps/api/geometry-retention";
 let mf: Miniflare, DB: D1Database;
@@ -28,7 +28,11 @@ const google = {
   GOOGLE_MAPS_MAP_ID: "test-map-id",
   GOOGLE_ROUTES_KEY: "test-server-secret",
 };
-async function req(path: string, body?: unknown, provider = true) {
+async function req(
+  path: string,
+  body?: unknown,
+  provider: boolean | Partial<Bindings> = true,
+) {
   return api.fetch(
     new Request("https://trackbus.test/api" + path, {
       method: body === undefined ? "GET" : "POST",
@@ -39,7 +43,10 @@ async function req(path: string, body?: unknown, provider = true) {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
-    { DB, ...(provider ? google : {}) },
+    {
+      DB,
+      ...(typeof provider === "object" ? provider : provider ? google : {}),
+    },
   );
 }
 beforeAll(async () => {
@@ -65,28 +72,60 @@ afterAll(async () => {
   await mf?.dispose();
 });
 afterEach(() => vi.unstubAllGlobals());
+it("Demo Key de avaliação atende apenas instituições demonstrativas", async () => {
+  const env = {
+    MAP_PROVIDER: "google",
+    GOOGLE_MAPS_MODE: "demo",
+    GOOGLE_MAPS_DEMO_KEY: "test-demo-only",
+    APP_ENV: "evaluation",
+  };
+  expect(
+    await (await req("/maps/config", undefined, env)).json(),
+  ).toMatchObject({
+    provider: "google",
+    demo: true,
+  });
+  await DB.prepare("UPDATE organizations SET demo=0").run();
+  try {
+    const send = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", send);
+    const config = await (await req("/maps/config", undefined, env)).json();
+    expect(config).toEqual({ provider: "maplibre", googlePending: true });
+    const created = await req(
+      "/routes",
+      {
+        name: "Instituição real sem Demo Key",
+        shift: "Manhã",
+        stops,
+      },
+      env,
+    );
+    expect(created.status).toBe(201);
+    expect(send).not.toHaveBeenCalled();
+  } finally {
+    await DB.prepare("UPDATE organizations SET demo=1").run();
+  }
+});
 it("contrato Google simulado somente no teste: salva coordenadas temporárias, não duração/distância do provedor", async () => {
-  const send = vi
-    .fn<typeof fetch>()
-    .mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          routes: [
-            {
-              distanceMeters: 1000,
-              duration: "200s",
-              polyline: {
-                geoJsonLinestring: {
-                  type: "LineString",
-                  coordinates: stops.map((s) => [s.lng, s.lat]),
-                },
+  const send = vi.fn<typeof fetch>().mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        routes: [
+          {
+            distanceMeters: 1000,
+            duration: "200s",
+            polyline: {
+              geoJsonLinestring: {
+                type: "LineString",
+                coordinates: stops.map((s) => [s.lng, s.lat]),
               },
             },
-          ],
-        }),
-        { status: 200 },
-      ),
-    );
+          },
+        ],
+      }),
+      { status: 200 },
+    ),
+  );
   vi.stubGlobal("fetch", send);
   const response = await req("/routes", {
     name: "Google contratual",
