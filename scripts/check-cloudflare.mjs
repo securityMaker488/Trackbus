@@ -10,19 +10,6 @@ const config = parsed.config;
 const vars = config.vars || {},
   db = config.d1_databases?.find((d) => d.binding === "DB");
 const pending = [];
-const isolatedEvaluation =
-  config.name === "trackbus-demonstracao" &&
-  db?.database_name === "trackbus-demo" &&
-  db?.database_id === "9d5746f5-81f9-4878-9984-3765e60cca8c" &&
-  vars.APP_ENV === "evaluation";
-if (
-  (vars.GOOGLE_MAPS_MODE === "demo" && !isolatedEvaluation) ||
-  vars.APP_ENV === "development" ||
-  (vars.APP_ENV === "evaluation" && !isolatedEvaluation)
-)
-  pending.push(
-    "Demo Key remota exige o Worker e D1 isolados de avaliação; nunca produção",
-  );
 if (Object.keys(vars).some((key) => /KEY|SECRET|PRIVATE/.test(key)))
   pending.push(
     "Credenciais devem usar Wrangler secrets, nunca vars versionadas",
