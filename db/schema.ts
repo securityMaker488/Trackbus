@@ -98,6 +98,7 @@ export const routes = sqliteTable(
     routed: integer("routed", { mode: "boolean" }).notNull().default(false),
     distanceMeters: real("distance_meters"),
     geometrySource: text("geometry_source").notNull().default("unknown"),
+    geometryExpiresAt: integer("geometry_expires_at"),
     published: integer("published", { mode: "boolean" })
       .notNull()
       .default(false),
@@ -203,6 +204,8 @@ export const trips = sqliteTable(
       .notNull()
       .default("unassigned"),
     revision: integer("revision").notNull().default(0),
+    currentCycle: integer("current_cycle").notNull().default(0),
+    cycleStartedAt: integer("cycle_started_at"),
   },
   (t) => [index("trip_org_time").on(t.orgId, t.plannedStart)],
 );
@@ -216,7 +219,52 @@ export const locations = sqliteTable("locations", {
   position: text("position", { mode: "json" }).$type<Position>().notNull(),
   progress: text("progress", { mode: "json" }).$type<TrackingProgress>(),
   updatedAt: integer("updated_at").notNull(),
+  cycle: integer("cycle").notNull().default(1),
 });
+export const tripCycles = sqliteTable(
+  "trip_cycles",
+  {
+    id: pk(),
+    orgId: org(),
+    tripId: text("trip_id")
+      .notNull()
+      .references(() => trips.id),
+    number: integer("number").notNull(),
+    startedAt: integer("started_at").notNull(),
+    endedAt: integer("ended_at"),
+    endedReason: text("ended_reason"),
+  },
+  (t) => [
+    uniqueIndex("cycle_trip_number").on(t.tripId, t.number),
+    index("cycle_org_trip").on(t.orgId, t.tripId, t.number),
+  ],
+);
+export const studentCheckins = sqliteTable(
+  "student_checkins",
+  {
+    id: pk(),
+    orgId: org(),
+    subject: text("subject").notNull(),
+    tripId: text("trip_id")
+      .notNull()
+      .references(() => trips.id),
+    cycle: integer("cycle").notNull(),
+    stopId: text("stop_id").notNull(),
+    createdAt: integer("created_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("checkin_subject").on(t.orgId, t.subject),
+    index("checkin_trip_cycle_stop").on(
+      t.orgId,
+      t.tripId,
+      t.cycle,
+      t.stopId,
+      t.expiresAt,
+    ),
+    index("checkin_expiry").on(t.expiresAt),
+  ],
+);
 export const tripEvents = sqliteTable(
   "trip_events",
   {
@@ -410,6 +458,7 @@ export const journeyPreferences = sqliteTable(
     favorite: integer("favorite", { mode: "boolean" }).notNull(),
     selected: integer("selected", { mode: "boolean" }).notNull(),
     notify: integer("notify", { mode: "boolean" }).notNull(),
+    nextAlertCheckAt: integer("next_alert_check_at").notNull().default(0),
   },
   (t) => [
     uniqueIndex("journey_subject_route").on(t.orgId, t.subject, t.routeId),
@@ -424,6 +473,18 @@ export const pushSubscriptions = sqliteTable(
     endpoint: text("endpoint").notNull(),
     expires: integer("expires").notNull(),
     lastNotice: text("last_notice"),
+    p256dh: text("p256dh"),
+    auth: text("auth"),
+    privatePreview: integer("private_preview", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    smart: integer("smart", { mode: "boolean" }).notNull().default(true),
+    operational: integer("operational", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    approaching: integer("approaching", { mode: "boolean" })
+      .notNull()
+      .default(true),
   },
   (t) => [index("push_org_subject").on(t.orgId, t.subject)],
 );

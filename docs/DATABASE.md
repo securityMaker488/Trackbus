@@ -2,7 +2,7 @@
 
 V7: aplicar também `0006_archive_routes.sql`, que adiciona `routes.archived_at` nullable. Rotas arquivadas deixam as consultas operacionais e de alunos, mantendo registros/versões/trips para auditoria. O bootstrap novo não cria rotas, viagens ou estudantes. Os exemplos locais foram arquivados por API após backup; a implantação remota mantém seu próprio histórico.
 
-Fonte de verdade: `db/schema.ts`. D1 com Drizzle e consultas parametrizadas. São 25 tabelas, com dados operacionais isolados por org_id.
+Fonte de verdade: `db/schema.ts` e migrações SQL. D1 com Drizzle e consultas parametrizadas, com dados operacionais isolados por org_id.
 
 | Grupo       | Tabelas                                                                      |
 | ----------- | ---------------------------------------------------------------------------- |
@@ -33,3 +33,13 @@ Migração0005_gps_route_progress acrescenta `locations.progress`, JSON nullable
 access_sessions.parent_id vincula handoff/editor ao aparelho, com revogação em cascata e revalidação na leitura. 0008 adiciona distance_meters nullable e geometry_source. Novos cálculos guardam osm-local ou institutional; sem caminho viário, distância fica null e fonte schematic. Registros anteriores permanecem unknown até um cálculo, preservando honestidade da origem.
 
 Cada Stop pode guardar reference {id,name,source:OpenStreetMap}. Origem/destino são primeira/última parada. Dados de POI só entram na rota quando a pessoa confirma a referência. A localização obtida para centralizar o editor não cria histórico; usar como origem salva a parada explicitamente escolhida.
+
+## V11 — migrações 0009 a 0013
+
+- `0009_trip_cycles_checkins`: `trip_cycles`, `student_checkins`, volta/instante de início em trips e volta na posição. Triggers fecham histórico e limpam somente estado efêmero ao mudar/encerrar volta. Guardas rejeitam telemetria antiga; primeira partida permite a leitura inicial obtida até 60s antes de iniciar.
+- `0010_smart_push`: chaves/preferências de inscrição; `walk_estimates`, `journey_alerts`, `push_deliveries`, índices e limpeza por volta. Nenhuma tabela recebe coordenadas do aluno. Eventos/inscrições possuem IDs únicos para idempotência; tentativas e lease permitem retomada da fila.
+- `0011_google_geometry_expiry`: validade da geometria e índices de expiração em rotas/versões/snapshots. Coordenadas Google são transitórias (24h); expiração mantém paradas e histórico, suspende ETA e substitui por esquema próprio.
+- `0012_wait_dispatch_indexes`: índices para esperas vencidas e avisos de encerramento.
+- `0013_approaching_schedule`: instante da próxima avaliação de aproximação na preferência e índice; não cria estimativa fictícia de caminhada nem nova tabela de GPS.
+
+Aplicar em ordem, com backup antes do banco remoto. Não copiar dados locais de teste. Place ID Google pode ser salvo com nome genérico `Referência Google`; resultados de Places e duração Google de caminhada não formam catálogo persistente. Dados próprios de paradas/desenhos permanecem.

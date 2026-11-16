@@ -6,6 +6,10 @@ Smart Arrival, em packages/domain, projeta GPS sobre a geometria viária e calcu
 
 Smart Departure calcula floor(ETA mínimo - caminhada em minutos - margem). Estados on_time, leave_now, insufficient, unavailable; a interface distingue saída agora e margem pequena. Recomenda prudência, nunca correr atrás do veículo. Usar GPS do aluno exige ação explícita. O trajeto a pé segue vias do recorte local quando conectado; fora dele exige provedor configurado e pode ficar indisponível.
 
-Leituras da jornada são consultadas a cada 5s com viagem em execução, 15s sem execução, pausadas com aba oculta. Avisos continuam na central interna sem Push. Marcação de leitura é persistida e autorizada por viagem. Posição do aluno e caminhada permanecem apenas no estado da página.
+Leituras da jornada são consultadas a cada 5s com viagem em execução, 15s sem execução, pausadas com aba oculta. Avisos continuam na central interna sem Push. Marcação de leitura é persistida e autorizada por viagem. Posição do aluno e geometria da caminhada permanecem apenas no estado da página. V11 guarda somente duração, validade e contexto quando as notificações estão habilitadas, para processar Smart Departure no servidor.
 
 O mapa V6.1 divide a geometria no último progresso confirmado: restante em amarelo forte, concluído em amarelo profundo pontilhado. A confirmação automática de 2min parado aparece como “Aguardando no ponto” com o nome da parada. Não equivale à espera autorizada de5min nem acrescenta artificialmente5min ao ETA. Critérios e limitações em GPS.md.
+
+V11 separa cada volta, expira caminhada em dez minutos e descarta estado anterior ao trocar de volta. Alertas passam por preparar/sair/margem insuficiente, sem repetir a mesma fase por aluno/parada/volta. Aproximação é avaliada também sem caminhada, usando somente rota/parada selecionadas e GPS recente do ônibus; não inventa duração do aluno. Avisos operacionais também independem de caminhada. [Web Push e ensaio físico pendente](WEB_PUSH.md).
+
+Google Routes é usado quando configurado; sua duração fica transitória na tela. Para alertas fechados nesse modo, o participante pode informar seu tempo habitual. A aplicação não acompanha sua posição com a página fechada. O check-in é confirmação voluntária de 15 minutos; não comprova presença física nem vaga. [Ciclos](TRIP_CYCLES.md) · [Confirmações](STUDENT_CHECKINS.md).

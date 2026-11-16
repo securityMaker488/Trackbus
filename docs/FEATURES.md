@@ -1,5 +1,9 @@
 # Funcionalidades e histórico de auditoria
 
+## V11 local — 16/11/2026
+
+Desenho livre integrado ao editor preservado; Google Maps/Places/Routes preparado com Demo Key apenas em avaliação; ciclos com guardas de percurso e horário; check-ins anônimos por parada; fila push cifrada e revogável; processamento de saída e aproximação em lotes pequenos. APK 11.0.0 assinado. Google real, GPS físico e entrega push fechada ainda não homologados. Produção não atualizada por instrução do titular. Evidências atuais em [V11-AUDITORIA.md](V11-AUDITORIA.md), [TESTING.md](TESTING.md) e [PERFORMANCE.md](PERFORMANCE.md). Os tópicos seguintes são históricos.
+
 ## Atualização V7.1 — 14/11/2026
 
 Editor por clique/touch com exploração segura, nomes automáticos, desfazer/refazer, confirmação de limpeza, ordem, prévia e persistência. Localização consentida com precisão e opção de origem. Catálogo OSM de 4.707 referências da Paraíba servido por proximidade; nomes sugeridos e confirmados. Motorista cria/envia rascunhos, admin aprova/devolve/publica; isolamento e versão são validados na API/D1. Driver 7.1 compilado, com entrada temporária no editor.

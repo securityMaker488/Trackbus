@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 const origin = "http://127.0.0.1:5173";
+// External map tiles are blocked only in tests. No product fallback invents data.
 async function login(page: Page) {
   await page.route("https://tile.openstreetmap.org/**", (r) => r.abort());
   await page.goto("/signin-with-chatgpt?return_to=/");
@@ -30,6 +31,52 @@ async function post(page: Page, path: string, data: unknown) {
   expect(r.status(), await r.text()).toBeLessThan(300);
   return r.json();
 }
+
+test("desenho livre persiste como rascunho e mantém desfazer/refazer", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await login(page);
+  await page.getByRole("button", { name: "Criar rota", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.locator(".maplibregl-canvas")).toBeVisible();
+  await dialog
+    .getByRole("button", { name: "Desenhar trajeto", exact: true })
+    .click();
+  const drawing = dialog.getByLabel("Área para desenhar o trajeto"),
+    box = (await drawing.boundingBox())!;
+  await page.mouse.move(box.x + 180, box.y + 220);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 280, box.y + 230, { steps: 10 });
+  await page.mouse.move(box.x + 350, box.y + 310, { steps: 10 });
+  await page.mouse.up();
+  await expect(
+    dialog.getByRole("button", { name: "Remover desenho", exact: true }),
+  ).toBeVisible();
+  await expect(dialog.locator(".stop-edit")).toHaveCount(2);
+  await dialog.getByRole("button", { name: "Desfazer", exact: true }).click();
+  await expect(
+    dialog.getByRole("button", { name: "Remover desenho", exact: true }),
+  ).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Refazer", exact: true }).click();
+  const name = "Desenho V11 " + Date.now();
+  await dialog.getByLabel("Nome da rota", { exact: true }).fill(name);
+  await page.screenshot({
+    path: "docs/screenshots/editor-drawing-v11.png",
+    fullPage: true,
+  });
+  await dialog
+    .getByRole("button", { name: "Salvar itinerário", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  const state = await (await page.request.get("/api/state")).json();
+  const route = state.routes.find((r: { name: string }) => r.name === name);
+  expect(route.routed).toBe(false);
+  expect(route.geometrySource).toBe("user-drawn");
+  expect(route.geometry.length).toBeGreaterThan(2);
+  await post(page, `/routes/${route.id}/archive`, {});
+});
 test("cinco toques, explorar sem adicionar, desfazer/refazer, reordenar e persistir", async ({
   page,
 }) => {

@@ -1,4 +1,6 @@
 import { useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import type { MapsConfig } from "../../packages/shared/maps";
 import {
   ArrowDown,
   ArrowUp,
@@ -30,6 +32,7 @@ type Preview = {
   geometry?: [number, number][];
   meters?: number;
   message?: string;
+  source?: string;
 };
 const coordinateKey = (stops: Stop[]) =>
   JSON.stringify(stops.map((s) => [s.id, s.lat, s.lng]));
@@ -48,6 +51,16 @@ export function RouteEditor({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const maps = useQuery({
+    queryKey: ["maps-config"],
+    queryFn: () => api<MapsConfig>("/maps/config"),
+    staleTime: 300000,
+    retry: false,
+  });
+  const google = maps.data?.provider === "google";
+  const [googleReference, setGoogleReference] = useState<
+    (Point & { id: string }) | null
+  >(null);
   const [name, setName] = useState(
       route?.name || `Nova rota ${String(sequence).padStart(2, "0")}`,
     ),
@@ -58,7 +71,12 @@ export function RouteEditor({
   const history = useEditHistory<Stop[]>(route?.stops || []),
     stops = history.value,
     setStops = history.change;
-  const [mode, setMode] = useState<"add" | "pan">("add"),
+  const drawingHistory = useEditHistory<[number, number][]>(
+    route?.geometrySource === "user-drawn" ? route.geometry : [],
+  );
+  const [adjustDrawing, setAdjustDrawing] = useState(false);
+  const drawing = drawingHistory.value;
+  const [mode, setMode] = useState<"add" | "pan" | "draw">("add"),
     [saving, setSaving] = useState(false),
     [confirmClear, setConfirmClear] = useState(false),
     [fix, setFix] = useState<EditorFix | null>(null),
@@ -77,11 +95,15 @@ export function RouteEditor({
   const center = useRef<Point>({ lat: -7.2185, lng: -35.8855 }),
     queryId = useRef(0),
     lastAdded = useRef("");
-  const key = coordinateKey(stops),
-    original = !!route?.routed && key === coordinateKey(route.stops),
+  const key = coordinateKey(stops) + JSON.stringify(drawing),
+    original =
+      !drawing.length &&
+      !!route?.routed &&
+      coordinateKey(stops) === coordinateKey(route.stops),
     previewed = preview?.key === key ? preview.result : null,
     geometry =
       previewed?.geometry ||
+      (drawing.length ? drawing : undefined) ||
       (original
         ? route!.geometry
         : stops.map((s) => [s.lng, s.lat] as [number, number])),
@@ -108,7 +130,17 @@ export function RouteEditor({
       id: crypto.randomUUID(),
       name: `Parada ${String(stops.length + 1).padStart(2, "0")}`,
       dwellSeconds: 45,
+      ...(googleReference && distance(googleReference, point) <= 150
+        ? {
+            reference: {
+              id: googleReference.id,
+              name: "Referência Google",
+              source: "Google Maps",
+            },
+          }
+        : {}),
     };
+    setGoogleReference(null);
     setStops(first ? [stop, ...stops] : [...stops, stop]);
     const nearby = [
       ...(armedPoi ? [armedPoi] : []),
@@ -117,7 +149,7 @@ export function RouteEditor({
     setSuggestion(nearby ? { stopId: stop.id, poi: nearby } : null);
     setArmedPoi(null);
     lastAdded.current = stop.id;
-    if (!nearby)
+    if (!nearby && !google)
       void api<PoiResult>(
         `/geo/pois?lat=${point.lat.toFixed(5)}&lng=${point.lng.toFixed(5)}&radius=150&category=all`,
       )
@@ -157,6 +189,8 @@ export function RouteEditor({
     stops,
     active,
     expectedVersion: route?.version,
+    drawing: drawing.length ? drawing : undefined,
+    adjustDrawing,
   });
   return (
     <Modal
@@ -171,6 +205,13 @@ export function RouteEditor({
     >
       <div className="editor-toolbar" aria-label="Ferramentas do itinerário">
         <div className="editor-modes">
+          <button
+            className="button secondary"
+            aria-pressed={mode === "draw"}
+            onClick={() => setMode("draw")}
+          >
+            Desenhar trajeto
+          </button>
           <button
             className="button secondary"
             aria-pressed={mode === "add"}
@@ -195,8 +236,10 @@ export function RouteEditor({
           className="icon-button"
           title="Desfazer"
           aria-label="Desfazer"
-          disabled={!history.canUndo}
-          onClick={history.undo}
+          disabled={
+            mode === "draw" ? !drawingHistory.canUndo : !history.canUndo
+          }
+          onClick={mode === "draw" ? drawingHistory.undo : history.undo}
         >
           <Undo2 size={18} />
         </button>
@@ -204,8 +247,10 @@ export function RouteEditor({
           className="icon-button"
           title="Refazer"
           aria-label="Refazer"
-          disabled={!history.canRedo}
-          onClick={history.redo}
+          disabled={
+            mode === "draw" ? !drawingHistory.canRedo : !history.canRedo
+          }
+          onClick={mode === "draw" ? drawingHistory.redo : history.redo}
         >
           <Redo2 size={18} />
         </button>
@@ -224,6 +269,7 @@ export function RouteEditor({
             try {
               const result = await api<Preview>("/routes/preview", body());
               setPreview({ key, result });
+              if (drawing.length) setAdjustDrawing(result.available);
             } catch (e) {
               toast.error((e as Error).message);
             } finally {
@@ -234,6 +280,37 @@ export function RouteEditor({
           {previewBusy ? "Calculando…" : "Pré-visualizar vias"}
         </button>
       </div>
+      {(mode === "draw" || drawing.length > 0) && (
+        <div className="editor-note">
+          <strong>Desenho livre · rascunho esquemático</strong>
+          <p>
+            Arraste o dedo ou mouse sobre o mapa. O desenho não confirma vias
+            transitáveis. Use Explorar para mover o mapa.
+          </p>
+          {drawing.length > 0 && (
+            <>
+              <label className="safe-checkbox">
+                <input
+                  type="checkbox"
+                  checked={adjustDrawing}
+                  onChange={(e) => setAdjustDrawing(e.target.checked)}
+                />{" "}
+                Tentar ajustar o desenho às vias ao salvar
+              </label>
+              <button
+                className="text-button"
+                onClick={() => {
+                  drawingHistory.change([]);
+                  setPreview(null);
+                  setAdjustDrawing(false);
+                }}
+              >
+                Remover desenho
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {confirmClear && (
         <div className="editor-confirm" role="alert">
           <span>Remover todas as paradas deste rascunho?</span>
@@ -459,99 +536,147 @@ export function RouteEditor({
               </div>
             ))}
           </div>
-          <section className="poi-panel" aria-label="Referências próximas">
-            <h3>O que há por perto?</h3>
-            <p>Explore o mapa e consulte referências a até 1,5 km do centro.</p>
-            <label>
-              Categoria
-              <select
-                value={category}
-                onChange={(e) => {
-                  setCategory(e.target.value);
-                  setPois(null);
-                  setSelectedPoi(null);
-                  setArmedPoi(null);
-                }}
-              >
-                <option value="all">Todas as categorias</option>
-                {Object.entries(poiCategories).map(([k, label]) => (
-                  <option key={k} value={k}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="button secondary"
-              disabled={loadingPois}
-              onClick={() => void findPois()}
-            >
-              {loadingPois ? "Buscando…" : "Buscar referências nesta região"}
-            </button>
-            {pois && (
-              <>
-                <small>{pois.coverage}</small>
-                {!pois.points.length && (
-                  <p role="status">
-                    Nenhuma referência cadastrada nesta região. Continue criando
-                    suas paradas normalmente.
-                  </p>
-                )}
-                <div className="poi-results">
-                  {pois.points.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setSelectedPoi(p)}
-                      aria-pressed={selectedPoi?.id === p.id}
-                    >
-                      <strong>{p.name}</strong>
-                      <span>
-                        {poiCategories[p.category]} · {p.meters} m do centro
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                {pois.truncated && (
-                  <small>
-                    Mostrando as 40 referências mais próximas. Filtre por
-                    categoria.
-                  </small>
-                )}
-                <small>
-                  {pois.attribution} · {pois.dataDate?.slice(0, 10)}
-                </small>
-              </>
-            )}
-            {selectedPoi && (
-              <div className="editor-note">
-                <strong>{selectedPoi.name}</strong>
-                <span>{poiCategories[selectedPoi.category]}</span>
-                <small>
-                  {selectedPoi.municipality ||
-                    "Município não informado na fonte"}
-                </small>
-                <button
-                  className="button primary"
-                  onClick={() => {
-                    setArmedPoi(selectedPoi);
-                    setMode("add");
+          {!google && (
+            <section className="poi-panel" aria-label="Referências próximas">
+              <h3>O que há por perto?</h3>
+              <p>
+                Explore o mapa e consulte referências a até 1,5 km do centro.
+              </p>
+              <label>
+                Categoria
+                <select
+                  value={category}
+                  onChange={(e) => {
+                    setCategory(e.target.value);
+                    setPois(null);
+                    setSelectedPoi(null);
+                    setArmedPoi(null);
                   }}
                 >
-                  Adicionar parada próxima
-                </button>
-                <small>
-                  Escolha no mapa um ponto seguro na via próxima. O prédio é
-                  apenas uma referência.
-                </small>
-              </div>
-            )}
-          </section>
+                  <option value="all">Todas as categorias</option>
+                  {Object.entries(poiCategories).map(([k, label]) => (
+                    <option key={k} value={k}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="button secondary"
+                disabled={loadingPois}
+                onClick={() => void findPois()}
+              >
+                {loadingPois ? "Buscando…" : "Buscar referências nesta região"}
+              </button>
+              {pois && (
+                <>
+                  <small>{pois.coverage}</small>
+                  {!pois.points.length && (
+                    <p role="status">
+                      Nenhuma referência cadastrada nesta região. Continue
+                      criando suas paradas normalmente.
+                    </p>
+                  )}
+                  <div className="poi-results">
+                    {pois.points.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => setSelectedPoi(p)}
+                        aria-pressed={selectedPoi?.id === p.id}
+                      >
+                        <strong>{p.name}</strong>
+                        <span>
+                          {poiCategories[p.category]} · {p.meters} m do centro
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  {pois.truncated && (
+                    <small>
+                      Mostrando as 40 referências mais próximas. Filtre por
+                      categoria.
+                    </small>
+                  )}
+                  <small>
+                    {pois.attribution} · {pois.dataDate?.slice(0, 10)}
+                  </small>
+                </>
+              )}
+              {selectedPoi && (
+                <div className="editor-note">
+                  <strong>{selectedPoi.name}</strong>
+                  <span>{poiCategories[selectedPoi.category]}</span>
+                  <small>
+                    {selectedPoi.municipality ||
+                      "Município não informado na fonte"}
+                  </small>
+                  <button
+                    className="button primary"
+                    onClick={() => {
+                      setArmedPoi(selectedPoi);
+                      setMode("add");
+                    }}
+                  >
+                    Adicionar parada próxima
+                  </button>
+                  <small>
+                    Escolha no mapa um ponto seguro na via próxima. O prédio é
+                    apenas uma referência.
+                  </small>
+                </div>
+              )}
+            </section>
+          )}
         </div>
         <div className="editor-map-area">
           <MapView
             large
             editor
-            routes={stops.length ? [{ name, stops, geometry, routed }] : []}
+            onDraw={
+              mode === "draw"
+                ? (line) => {
+                    drawingHistory.change(line);
+                    setAdjustDrawing(false);
+                    setPreview(null);
+                    if (!stops.length) {
+                      const ends = [line[0], line.at(-1)!];
+                      if (
+                        distance(
+                          { lng: ends[0][0], lat: ends[0][1] },
+                          { lng: ends[1][0], lat: ends[1][1] },
+                        ) >= 2
+                      )
+                        setStops(
+                          ends.map(([lng, lat], i) => ({
+                            id: crypto.randomUUID(),
+                            lat,
+                            lng,
+                            name: `Parada ${i + 1}`,
+                            dwellSeconds: 45,
+                          })),
+                        );
+                    }
+                  }
+                : undefined
+            }
+            routes={
+              stops.length
+                ? [
+                    {
+                      name,
+                      stops,
+                      geometry,
+                      routed,
+                      geometrySource:
+                        previewed?.source ||
+                        (original ? route?.geometrySource : undefined),
+                      geometryExpiresAt: original
+                        ? route?.geometryExpiresAt
+                        : undefined,
+                    },
+                  ]
+                : []
+            }
             onPick={mode === "add" ? (p) => add(p) : undefined}
             onMoveStop={(id, p) => update(id, { ...p, reference: undefined })}
             onViewportChange={(p) => {
@@ -561,13 +686,21 @@ export function RouteEditor({
             editorPosition={fix}
             pointsOfInterest={pois?.points || []}
             onPoiSelect={setSelectedPoi}
+            onGoogleReference={(p) => {
+              setGoogleReference(p);
+              setMode("add");
+              setArmedPoi(null);
+              setPois(null);
+            }}
           />
           <div className="editor-map-hint" role="status">
             {armedPoi
               ? `Toque na via próxima a ${armedPoi.name}.`
               : mode === "add"
                 ? "Toque para adicionar · Arraste o mapa para explorar · Arraste uma parada para ajustar"
-                : "Explore sem adicionar pontos. Volte a “Adicionar paradas” quando quiser continuar."}
+                : mode === "draw"
+                  ? "Arraste para desenhar o percurso. Use Explorar mapa para mudar a região."
+                  : "Explore sem adicionar pontos. Volte a “Adicionar paradas” quando quiser continuar."}
           </div>
           {previewed && (
             <p className="editor-preview" role="status">

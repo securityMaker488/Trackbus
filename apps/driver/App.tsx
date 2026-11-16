@@ -303,6 +303,46 @@ export default function App() {
             </View>
             {t && (
               <>
+                <Text style={styles.text}>
+                  {t.currentCycle
+                    ? `Volta ${t.currentCycle}`
+                    : "Aguardando início"}
+                </Text>
+                {t.stops.map((stop) => (
+                  <Text style={styles.text} key={stop.id}>
+                    {stop.name}:{" "}
+                    {t.waiting?.find(
+                      (w) => w.stopId === stop.id && w.cycle === t.currentCycle,
+                    )?.count || 0}{" "}
+                    aguardando
+                  </Text>
+                ))}
+                {t.currentCycle > 0 && t.status === "in_progress" && (
+                  <Action
+                    label="Iniciar próxima volta"
+                    disabled={busy || !safe || Date.now() >= t.plannedEnd}
+                    onPress={() =>
+                      Alert.alert(
+                        "Iniciar próxima volta?",
+                        "Confirme somente após concluir o percurso e retornar à origem em segurança.",
+                        [
+                          { text: "Voltar" },
+                          {
+                            text: "Confirmar",
+                            onPress: () =>
+                              exec(async () => {
+                                await request("/trips/" + t.id + "/cycles", {
+                                  expectedCycle: t.currentCycle,
+                                  safe: true,
+                                });
+                                await refresh();
+                              }),
+                          },
+                        ],
+                      )
+                    }
+                  />
+                )}
                 {t.status === "scheduled" && (
                   <Action
                     label="Iniciar rota com GPS"

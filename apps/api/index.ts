@@ -26,6 +26,15 @@ import { trackJourney, visibleProgress } from "../../packages/domain/tracking";
 import { calculateRoute } from "./routing";
 import { calculateLocalRoute } from "../../packages/geodata";
 import { nearbyPois } from "./pois";
+import {
+  mapsConfig,
+  googleRoutesKey,
+  type MapsEnv,
+} from "../../packages/shared/maps";
+import { checkin, nextCycle, waitingCounts } from "./cycles";
+import { validPushKeys } from "./push";
+import { saveWalkEstimate } from "./smart-alerts";
+import { googleRoute } from "./google-routes";
 import { poiCategories } from "../../packages/shared/pois";
 import { deliver, expireWaits, validEndpoint } from "./notifications";
 import { preparePresentation } from "./presentation";
@@ -47,13 +56,14 @@ type Actor = {
   visitor?: boolean;
   editor?: boolean;
 };
-export type Bindings = AccessConfig & {
-  DB: D1Database;
-  VALHALLA_URL?: string;
-  VAPID_PUBLIC_KEY?: string;
-  VAPID_PRIVATE_JWK?: string;
-  VAPID_SUBJECT?: string;
-};
+export type Bindings = AccessConfig &
+  MapsEnv & {
+    DB: D1Database;
+    VALHALLA_URL?: string;
+    VAPID_PUBLIC_KEY?: string;
+    VAPID_PRIVATE_JWK?: string;
+    VAPID_SUBJECT?: string;
+  };
 type Env = {
   Bindings: Bindings;
   Variables: {
@@ -86,6 +96,16 @@ const day = (ms: number) =>
     day: "2-digit",
   }).format(ms);
 async function planBus(c: C, stops: Stop[]) {
+  if (mapsConfig(c.env).provider === "google") {
+    const key = googleRoutesKey(c.env);
+    if (!key) return null;
+    await limit(c.get("db"), "google-route:" + c.get("actor").orgId, 20);
+    try {
+      return await googleRoute(key, stops, "DRIVE");
+    } catch {
+      return null;
+    }
+  }
   const local = calculateLocalRoute(stops, "bus");
   if (local) return local;
   if (c.env.VALHALLA_URL) {
@@ -100,9 +120,44 @@ async function planBus(c: C, stops: Stop[]) {
 function geometryOrigin(plan: object | null) {
   return !plan
     ? "schematic"
-    : "source" in plan && plan.source === "osm-local"
-      ? "osm-local"
-      : "institutional";
+    : "source" in plan && plan.source === "google"
+      ? "google"
+      : "source" in plan && plan.source === "osm-local"
+        ? "osm-local"
+        : "institutional";
+}
+function geometryMetadata(plan: object | null, drawing?: [number, number][]) {
+  return {
+    geometrySource: !plan && drawing ? "user-drawn" : geometryOrigin(plan),
+    geometryExpiresAt:
+      geometryOrigin(plan) === "google" ? Date.now() + 86400000 : null,
+  };
+}
+async function planDraft(
+  c: C,
+  data: {
+    stops: Stop[];
+    drawing?: [number, number][];
+    adjustDrawing?: boolean;
+  },
+) {
+  if (!data.drawing) return planBus(c, data.stops);
+  if (!data.adjustDrawing) return null;
+  const points = data.drawing
+    .filter(
+      (_, i) =>
+        i === 0 ||
+        i === data.drawing!.length - 1 ||
+        i % Math.ceil((data.drawing!.length - 1) / 23) === 0,
+    )
+    .map(([lng, lat], i) => ({
+      lng,
+      lat,
+      id: String(i),
+      name: "Via " + i,
+      dwellSeconds: 0,
+    }));
+  return planBus(c, points);
 }
 async function payload<T extends z.ZodTypeAny>(
   c: C,
@@ -400,8 +455,22 @@ app.post("/journey/leave", async (c) => {
         ),
       )
       .returning();
-    if (visitor)
+    if (visitor) {
+      await db.run(
+        sql`DELETE FROM walk_estimates WHERE org_id=${visitor.orgId} AND subject=${visitor.subject}`,
+      );
+      await db.run(
+        sql`DELETE FROM journey_alerts WHERE org_id=${visitor.orgId} AND subject=${visitor.subject}`,
+      );
       await db.batch([
+        db
+          .delete(s.studentCheckins)
+          .where(
+            and(
+              eq(s.studentCheckins.orgId, visitor.orgId),
+              eq(s.studentCheckins.subject, visitor.subject),
+            ),
+          ),
         db
           .delete(s.journeyPreferences)
           .where(
@@ -427,6 +496,7 @@ app.post("/journey/leave", async (c) => {
             ),
           ),
       ]);
+    }
   }
   deleteCookie(c, "tb_visitor", { path: "/" });
   return c.json({ ok: true });
@@ -532,19 +602,24 @@ app.use("*", async (c, next) => {
               "/api/journey/state",
               "/api/journey/select",
               "/api/journey/walk",
+              "/api/maps/config",
+              "/api/journey/checkin",
+              "/api/journey/walk-estimate",
+              "/api/journey/push/status",
             ].includes(path)
           : kind === "editor"
             ? [
                 "/api/me",
                 "/api/state",
                 "/api/geo/pois",
+                "/api/maps/config",
                 "/api/routes",
                 "/api/routes/preview",
                 "/api/driver/editor-logout",
               ].includes(path) ||
               /^\/api\/routes\/[^/]+\/(submit|calculate)$/.test(path) ||
               (c.req.method === "PUT" && /^\/api\/routes\/[^/]+$/.test(path))
-            : /^\/api\/(driver\/(trips|incidents|revoke|editor-link)|trips\/[^/]+\/(status|location|wait)|notices|incidents\/[^/]+\/resolve)$/.test(
+            : /^\/api\/(driver\/(trips|incidents|revoke|editor-link)|trips\/[^/]+\/(status|location|wait|cycles)|notices|incidents\/[^/]+\/resolve)$/.test(
                 path,
               );
     if (!permitted && !(kind === "visitor" && path === "/api/journey/push"))
@@ -662,6 +737,7 @@ app.use("*", async (c, next) => {
   }
   await next();
 });
+app.get("/maps/config", (c) => c.json(mapsConfig(c.env)));
 app.get("/me", async (c) => {
   const a = c.get("actor");
   return c.json(
@@ -687,7 +763,21 @@ app.post("/journey/push", async (c) => {
     p = await payload(
       c,
       z
-        .object({ endpoint: z.string().max(2048), enabled: z.boolean() })
+        .object({
+          endpoint: z.string().max(2048),
+          enabled: z.boolean(),
+          keys: z
+            .object({
+              p256dh: z.string().min(86).max(90),
+              auth: z.string().min(22).max(24),
+            })
+            .strict()
+            .optional(),
+          privatePreview: z.boolean().default(true),
+          smart: z.boolean().default(true),
+          operational: z.boolean().default(true),
+          approaching: z.boolean().default(true),
+        })
         .strict(),
     );
   if (!validEndpoint(p.endpoint)) fail(422, "Serviço push não reconhecido");
@@ -710,24 +800,101 @@ app.post("/journey/push", async (c) => {
     !c.env.VAPID_PUBLIC_KEY
   )
     fail(503, "Web Push não configurado");
-  await db
+  if (!p.keys || !(await validPushKeys(p.keys)))
+    fail(
+      422,
+      "Chaves de notificação inválidas. Reative as notificações neste aparelho.",
+    );
+  const [existing] = await db
+    .select()
+    .from(s.pushSubscriptions)
+    .where(eq(s.pushSubscriptions.id, id));
+  if (existing && (existing.orgId !== a.orgId || existing.subject !== a.userId))
+    fail(
+      409,
+      "Esta inscrição pertence a outra sessão. Desative-a no navegador e ative novamente.",
+    );
+  const own = await db
+    .select({ id: s.pushSubscriptions.id })
+    .from(s.pushSubscriptions)
+    .where(
+      and(
+        eq(s.pushSubscriptions.orgId, a.orgId),
+        eq(s.pushSubscriptions.subject, a.userId),
+        gt(s.pushSubscriptions.expires, Date.now()),
+      ),
+    );
+  if (!existing && own.length >= 5)
+    fail(
+      409,
+      "Limite de cinco aparelhos por sessão. Desative um aparelho antes de continuar.",
+    );
+  const registered = await db
     .insert(s.pushSubscriptions)
     .values({
       id,
       orgId: a.orgId,
       subject: a.userId,
       endpoint: p.endpoint,
+      ...p.keys,
+      privatePreview: p.privatePreview,
+      smart: p.smart,
+      operational: p.operational,
+      approaching: p.approaching,
       expires: Date.now() + (a.visitor ? 4 * 3600000 : 30 * 86400000),
     })
     .onConflictDoUpdate({
       target: s.pushSubscriptions.id,
+      setWhere: and(
+        eq(s.pushSubscriptions.orgId, a.orgId),
+        eq(s.pushSubscriptions.subject, a.userId),
+      ),
       set: {
+        ...p.keys,
+        privatePreview: p.privatePreview,
+        smart: p.smart,
+        operational: p.operational,
+        approaching: p.approaching,
         subject: a.userId,
         orgId: a.orgId,
         expires: Date.now() + (a.visitor ? 4 * 3600000 : 30 * 86400000),
       },
-    });
+    })
+    .returning({ id: s.pushSubscriptions.id });
+  if (!registered.length)
+    fail(
+      409,
+      "A inscrição foi alterada por outra sessão. Reative as notificações.",
+    );
   return c.json({ ok: true });
+});
+app.post("/journey/push/status", async (c) => {
+  roles(c, "student");
+  const p = await payload(
+      c,
+      z.object({ endpoint: z.string().max(2048) }).strict(),
+    ),
+    a = c.get("actor");
+  const [sub] = await c
+    .get("db")
+    .select({
+      expires: s.pushSubscriptions.expires,
+      privatePreview: s.pushSubscriptions.privatePreview,
+      smart: s.pushSubscriptions.smart,
+      operational: s.pushSubscriptions.operational,
+      approaching: s.pushSubscriptions.approaching,
+    })
+    .from(s.pushSubscriptions)
+    .where(
+      and(
+        eq(s.pushSubscriptions.id, await sha(p.endpoint)),
+        eq(s.pushSubscriptions.orgId, a.orgId),
+        eq(s.pushSubscriptions.subject, a.userId),
+        gt(s.pushSubscriptions.expires, Date.now()),
+        sql`${s.pushSubscriptions.p256dh} IS NOT NULL`,
+      ),
+    );
+  return c.json(sub ? { active: true, ...sub } : { active: false });
 });
 app.post("/journey/select", async (c) => {
   roles(c, "student");
@@ -745,6 +912,22 @@ app.post("/journey/select", async (c) => {
   await saveSelection(c.get("db"), c.get("actor"), choice);
   return c.json({ ok: true });
 });
+app.post("/journey/checkin", async (c) => {
+  roles(c, "student");
+  const p = await payload(
+    c,
+    z
+      .object({
+        tripId: z.string().min(1).max(100),
+        cycle: z.number().int().positive(),
+        stopId: z.string().min(1).max(100),
+        active: z.boolean(),
+      })
+      .strict(),
+  );
+  const t = await getTrip(c, p.tripId);
+  return c.json(await checkin(c.get("db"), c.get("actor"), t, p));
+});
 app.post("/journey/walk", async (c) => {
   roles(c, "student");
   const pos = await payload(
@@ -757,8 +940,38 @@ app.post("/journey/walk", async (c) => {
       .strict(),
   );
   return c.json(
-    await walkToSelection(c.get("db"), c.get("actor"), pos, c.env.VALHALLA_URL),
+    await walkToSelection(
+      c.get("db"),
+      c.get("actor"),
+      pos,
+      c.env.VALHALLA_URL,
+      mapsConfig(c.env).provider === "google"
+        ? googleRoutesKey(c.env)
+        : undefined,
+    ),
   );
+});
+app.post("/journey/walk-estimate", async (c) => {
+  roles(c, "student");
+  const p = await payload(
+      c,
+      z.object({ minutes: z.number().int().min(1).max(180) }).strict(),
+    ),
+    a = c.get("actor"),
+    state = await journeyState(c.get("db"), a),
+    pref = state.preferences.find((p) => p.selected);
+  if (!state.trip?.currentCycle || !pref?.notify)
+    fail(409, "Selecione uma viagem ativa e habilite os alertas da sua rota.");
+  await saveWalkEstimate(c.get("db"), {
+    orgId: a.orgId,
+    subject: a.userId,
+    tripId: state.trip.id,
+    cycle: state.trip.currentCycle,
+    routeId: pref.routeId,
+    stopId: pref.stopId,
+    seconds: p.minutes * 60,
+  });
+  return c.json({ ok: true, validUntil: Date.now() + 600000 });
 });
 app.post("/journey/room", async (c) => {
   roles(c, "admin");
@@ -888,6 +1101,11 @@ app.get("/driver/trips", async (c) => {
           ),
         )
     : [];
+  const waiting = await waitingCounts(
+    c.get("db"),
+    c.get("actor").orgId,
+    trips.map((t) => t.id),
+  );
   return c.json(
     trips.map((t) => ({
       id: t.id,
@@ -895,6 +1113,9 @@ app.get("/driver/trips", async (c) => {
       status: t.status,
       stops: t.snapshot.stops,
       trackingMode: t.trackingMode,
+      currentCycle: t.currentCycle,
+      plannedEnd: t.plannedEnd,
+      waiting: waiting.filter((w) => w.tripId === t.id),
       progress: visibleProgress(
         fixes.find((f) => f.tripId === t.id)?.progress,
         t.status,
@@ -1197,6 +1418,24 @@ app.get("/state", async (c) => {
   }));
   return c.json({
     actor: a,
+    waiting: await waitingCounts(
+      db,
+      orgId,
+      ts.map((t) => t.id),
+    ),
+    cycles: tripIds.size
+      ? await db
+          .select()
+          .from(s.tripCycles)
+          .where(
+            and(
+              eq(s.tripCycles.orgId, orgId),
+              inArray(s.tripCycles.tripId, [...tripIds]),
+            ),
+          )
+          .orderBy(desc(s.tripCycles.startedAt))
+          .limit(500)
+      : [],
     organization: {
       id: org[0].id,
       name: org[0].name,
@@ -1383,19 +1622,9 @@ app.get("/geo/pois", async (c) => {
 });
 app.post("/routes/preview", async (c) => {
   roles(c, "admin", "driver");
-  const { stops } = await payload(c, v.routeSchema);
-  const local = calculateLocalRoute(stops, "bus");
-  if (local) return c.json({ available: true, ...local });
-  if (c.env.VALHALLA_URL) {
-    try {
-      return c.json({
-        available: true,
-        ...(await calculateRoute(c.env.VALHALLA_URL, stops, "bus")),
-      });
-    } catch {
-      /* Keep editing possible without a routing provider. */
-    }
-  }
+  const data = await payload(c, v.routeSchema);
+  const plan = await planDraft(c, { ...data, adjustDrawing: true });
+  if (plan) return c.json({ available: true, ...plan });
   return c.json({
     available: false,
     message:
@@ -1407,15 +1636,17 @@ app.post("/routes", async (c) => {
   const data = await payload(c, v.routeSchema),
     id = uuid(),
     orgId = c.get("actor").orgId,
-    planned = await planBus(c, data.stops),
+    planned = await planDraft(c, data),
     geometry =
       planned?.geometry ??
+      data.drawing ??
       data.stops.map((st) => [st.lng, st.lat] as [number, number]),
     snapshot = {
       name: data.name,
       stops: data.stops,
       geometry,
       routed: !!planned,
+      ...geometryMetadata(planned, data.drawing),
     };
   await c.get("db").batch([
     c
@@ -1427,8 +1658,11 @@ app.post("/routes", async (c) => {
         orgId,
         geometry,
         routed: snapshot.routed,
-        distanceMeters: planned?.meters ?? null,
-        geometrySource: geometryOrigin(planned),
+        distanceMeters:
+          geometryOrigin(planned) === "google"
+            ? null
+            : (planned?.meters ?? null),
+        ...geometryMetadata(planned, data.drawing),
         createdBy: c.get("actor").userId,
         approval: c.get("actor").role === "admin" ? "approved" : "draft",
         published: false,
@@ -1511,20 +1745,30 @@ app.post("/routes/:id/archive", async (c) => {
 app.put("/routes/:id", async (c) => {
   roles(c, "admin", "driver");
   const data = await payload(c, v.routeSchema),
-    r = await routeRef(c, c.req.param("id")),
-    unchanged =
+    r = await routeRef(c, c.req.param("id"));
+  editRoutePermission(c, r);
+  if (data.expectedVersion !== undefined && data.expectedVersion !== r.version)
+    fail(409, "Rota atualizada em outro dispositivo. Reabra o editor.");
+  const unchanged =
+      !data.drawing &&
+      (!r.geometryExpiresAt || r.geometryExpiresAt > Date.now()) &&
       JSON.stringify(data.stops.map((st) => [st.id, st.lat, st.lng])) ===
-      JSON.stringify(r.stops.map((st) => [st.id, st.lat, st.lng])),
-    planned = await planBus(c, data.stops),
+        JSON.stringify(r.stops.map((st) => [st.id, st.lat, st.lng])),
+    planned = unchanged && r.routed ? null : await planDraft(c, data),
     geometry =
       unchanged && r.routed
         ? r.geometry
         : (planned?.geometry ??
+          data.drawing ??
           data.stops.map((st) => [st.lng, st.lat] as [number, number])),
     routed = (unchanged && r.routed) || !!planned;
-  editRoutePermission(c, r);
-  if (data.expectedVersion !== undefined && data.expectedVersion !== r.version)
-    fail(409, "Rota atualizada em outro dispositivo. Reabra o editor.");
+  const metadata =
+    unchanged && r.routed
+      ? {
+          geometrySource: r.geometrySource,
+          geometryExpiresAt: r.geometryExpiresAt,
+        }
+      : geometryMetadata(planned, data.drawing);
   const assigned = await c
     .get("db")
     .select()
@@ -1541,9 +1785,12 @@ app.put("/routes/:id", async (c) => {
         geometry,
         routed,
         distanceMeters:
-          unchanged && r.routed ? r.distanceMeters : (planned?.meters ?? null),
-        geometrySource:
-          unchanged && r.routed ? r.geometrySource : geometryOrigin(planned),
+          unchanged && r.routed
+            ? r.distanceMeters
+            : geometryOrigin(planned) === "google"
+              ? null
+              : (planned?.meters ?? null),
+        ...metadata,
         version: r.version + 1,
         updatedAt: Date.now(),
         ...(c.get("actor").role === "driver"
@@ -1570,6 +1817,7 @@ app.put("/routes/:id", async (c) => {
           stops: data.stops,
           geometry,
           routed,
+          ...metadata,
         },
         createdAt: Date.now(),
       }),
@@ -1671,6 +1919,8 @@ app.post("/trips", async (c) => {
     a = c.get("actor");
   if (!r.active || r.approval !== "approved" || vehicle.status !== "available")
     fail(409, "Rota ou veículo indisponível");
+  if (r.geometryExpiresAt && r.geometryExpiresAt <= Date.now())
+    fail(409, "Recalcule o trajeto Google antes de programar a viagem.");
   if (data.trackingMode === "simulation" && !a.demo)
     fail(403, "Simulador exclusivo da demonstração");
   const [driver] = await db
@@ -1717,6 +1967,8 @@ app.post("/trips", async (c) => {
       stops: r.stops,
       geometry: r.geometry,
       routed: r.routed,
+      geometrySource: r.geometrySource,
+      geometryExpiresAt: r.geometryExpiresAt,
     },
   });
   await event(c, id, "scheduled", "Viagem programada", a.demo);
@@ -1745,6 +1997,16 @@ app.post("/trips/:id/status", async (c) => {
   if (status === "cancelled" && c.get("actor").role !== "admin")
     fail(403, "Cancelamento requer administrador");
   if (status === "in_progress") {
+    if (
+      t.snapshot.geometryExpiresAt &&
+      t.snapshot.geometryExpiresAt <= Date.now()
+    )
+      fail(
+        409,
+        "Trajeto Google expirado. Recalcule a rota e programe uma nova viagem.",
+      );
+    if (t.status === "scheduled" && Date.now() >= t.plannedEnd)
+      fail(409, "O horário desta viagem terminou. Programe um novo serviço.");
     if (
       (
         await c
@@ -1785,6 +2047,34 @@ app.post("/trips/:id/status", async (c) => {
     `Viagem ${t.name}: ${{ scheduled: "programada", in_progress: "em andamento", paused: "pausada", interrupted: "interrompida", completed: "encerrada", cancelled: "cancelada" }[status]}.`,
   );
   return c.json({ ok: true });
+});
+app.post("/trips/:id/cycles", async (c) => {
+  const t = await getTrip(c, c.req.param("id"), true);
+  const p = await payload(
+    c,
+    z
+      .object({
+        expectedCycle: z.number().int().positive(),
+        safe: z.literal(true),
+      })
+      .strict(),
+  );
+  const updated = await nextCycle(c.get("db"), t, p.expectedCycle);
+  await event(
+    c,
+    t.id,
+    "cycle_started",
+    `Volta ${updated.currentCycle} iniciada por confirmação do operador`,
+    t.trackingMode === "simulation",
+  );
+  await log(c, "trip_cycle_started", t.id);
+  await publishNotice(
+    c,
+    updated,
+    "cycle_started",
+    `Nova volta iniciada: ${updated.currentCycle}. Confirme sua parada e atualize a caminhada.`,
+  );
+  return c.json({ ok: true, currentCycle: updated.currentCycle });
 });
 async function storePosition(c: C, t: Trip, p: Position, validate = true) {
   const db = c.get("db"),
@@ -1828,11 +2118,17 @@ async function storePosition(c: C, t: Trip, p: Position, validate = true) {
       tripId: t.id,
       position: p,
       progress,
+      cycle: t.currentCycle,
       updatedAt: Date.now(),
     })
     .onConflictDoUpdate({
       target: s.locations.tripId,
-      set: { position: p, progress, updatedAt: Date.now() },
+      set: {
+        position: p,
+        progress,
+        cycle: t.currentCycle,
+        updatedAt: Date.now(),
+      },
       setWhere: old
         ? sql`json_extract(${s.locations.position}, '$.timestamp') = ${old.position.timestamp} AND ${old.position.timestamp} < ${p.timestamp}`
         : sql`0`,
@@ -2507,21 +2803,22 @@ app.post("/routes/:id/calculate", async (c) => {
   roles(c, "admin", "driver");
   const r = await routeRef(c, c.req.param("id"));
   editRoutePermission(c, r);
-  const local = calculateLocalRoute(r.stops, "bus");
-  if (!local && !c.env.VALHALLA_URL)
-    fail(422, "Paradas fora da cobertura ou sem via de ônibus conectada");
-  let route;
-  try {
-    route =
-      local ?? (await calculateRoute(c.env.VALHALLA_URL!, r.stops, "bus"));
-  } catch {
-    fail(503, "Não foi possível calcular o trajeto sobre vias");
-  }
+  const route = await planDraft(c, {
+    stops: r.stops,
+    drawing: r.geometrySource === "user-drawn" ? r.geometry : undefined,
+    adjustDrawing: true,
+  });
+  if (!route)
+    fail(
+      422,
+      "Roteamento indisponível, limite atingido ou paradas sem via conectada. Confira a configuração e tente novamente.",
+    );
   const snapshot = {
       name: r.name,
       stops: r.stops,
       geometry: route.geometry,
       routed: true,
+      ...geometryMetadata(route),
     },
     db = c.get("db");
   await db.batch([
@@ -2530,8 +2827,9 @@ app.post("/routes/:id/calculate", async (c) => {
       .set({
         geometry: route.geometry,
         routed: true,
-        distanceMeters: route.meters,
-        geometrySource: geometryOrigin(route),
+        distanceMeters:
+          geometryOrigin(route) === "google" ? null : route.meters,
+        ...geometryMetadata(route),
         version: r.version + 1,
         updatedAt: Date.now(),
       })
@@ -2600,7 +2898,8 @@ app.onError((err, c) => {
     message.includes("trip_conflict") ||
     message.includes("active_conflict") ||
     message.includes("route_version_conflict") ||
-    message.includes("route_not_approved")
+    message.includes("route_not_approved") ||
+    message.includes("checkin_cycle_conflict")
   )
     return c.json(
       {
@@ -2614,6 +2913,14 @@ app.onError((err, c) => {
     return c.json(
       { error: "Fonte de posição ou estado da viagem incompatível." },
       409,
+    );
+  if (message.includes("location_cycle_conflict"))
+    return c.json(
+      {
+        error:
+          "Posição anterior à volta atual. Aguarde a próxima atualização GPS.",
+      },
+      422,
     );
   if (err instanceof z.ZodError)
     return c.json({ error: "Dados inválidos" }, 422);

@@ -16,7 +16,13 @@ Admin salva aprovado, inicialmente não publicado. Motorista salva draft, pode e
 
 O servidor define autor/instituição, valida versões e guarda uma versão do itinerário em cada edição/cálculo. Uma viagem conserva seu snapshot. Edições concorrentes ou envio/revisão sobre versão antiga são recusados. Aprovar/publicar não muda automaticamente favoritos ou confirma vaga.
 
-No Android 7.1, o botão Criar ou revisar rotas abre este mesmo editor no navegador, com sessão restrita vinculada ao aparelho. Não há segundo editor redundante. Código de entrada expira em 60s e só pode ser usado uma vez; sessão dura até 1h. Ao desconectar o aparelho, o editor perde acesso.
+No Android, o botão Criar ou revisar rotas abre este mesmo editor no navegador, com sessão restrita vinculada ao aparelho. Não há segundo editor redundante. Código de entrada expira em 60s e só pode ser usado uma vez; sessão dura até 1h. Ao desconectar o aparelho, o editor perde acesso.
+
+## Desenho livre e Google — V11
+
+“Desenhar trajeto” aceita mouse/toque, sem mover o mapa durante o traço. Simplificação de 6 m e limites de pontos evitam excesso de geometria; desfazer/refazer do desenho é independente da lista de paradas. Origem/destino podem nascer das extremidades do primeiro desenho. O rascunho permanece explicitamente esquemático até ajuste por ruas. A prévia/salvamento valida proximidade de todas as paradas e informa quando o provedor não consegue ajustar.
+
+Com credenciais, Google Maps assume mapa/pesquisa/POIs, mantendo os mesmos contratos e editor. Places é contextual e global; resultados transitórios não alimentam catálogo próprio. Referência Google persistida contém Place ID e rótulo genérico. A versão MapLibre continua funcionando até homologar Google. [Configuração e limites](GOOGLE_MAPS.md).
 
 ## Validação
 

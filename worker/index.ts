@@ -2,8 +2,18 @@ import handler from "vinext/server/fetch-handler";
 import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
 import { verifyAccessIdentity } from "../apps/api/cloudflare-identity";
+import { mapsConfig } from "../packages/shared/maps";
+import { drizzle } from "drizzle-orm/d1";
+import { runNotificationTick } from "../apps/api/smart-alerts";
 
 const worker = {
+  async scheduled(
+    _event: ScheduledController,
+    env: Cloudflare.Env,
+    ctx: ExecutionContext,
+  ) {
+    if (env.DB) ctx.waitUntil(runNotificationTick(drizzle(env.DB), env));
+  },
   async fetch(
     request: Request,
     env: Cloudflare.Env,
@@ -100,10 +110,11 @@ const worker = {
       "geolocation=(self), camera=(), microphone=()",
     );
     if (!import.meta.env.DEV) {
+      const google = mapsConfig(env).provider === "google";
       secured.headers.set("Strict-Transport-Security", "max-age=31536000");
       secured.headers.set(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org; connect-src 'self' https://tile.openstreetmap.org; worker-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://chatgpt.com https://*.chatgpt.com",
+        `default-src 'self'; script-src 'self' 'unsafe-inline'${google ? " https://maps.googleapis.com https://maps.gstatic.com" : ""}; style-src 'self' 'unsafe-inline'${google ? " https://fonts.googleapis.com" : ""}; img-src 'self' data: blob: https://tile.openstreetmap.org${google ? " https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.googleusercontent.com" : ""}; connect-src 'self' https://tile.openstreetmap.org${google ? " https://*.googleapis.com https://*.gstatic.com https://*.google.com" : ""}; worker-src 'self' blob:; font-src 'self' data:${google ? " https://fonts.gstatic.com" : ""}; frame-src 'self'${google ? " https://*.google.com" : ""}; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://chatgpt.com https://*.chatgpt.com`,
       );
     }
     return secured;

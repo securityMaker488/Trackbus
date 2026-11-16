@@ -607,6 +607,15 @@ function App() {
             </a>
           )}
           <small>FECT & Congretech · Dados fictícios · Acesso privado</small>
+          <small>
+            <a href="/privacidade.html" target="_blank" rel="noreferrer">
+              Privacidade
+            </a>{" "}
+            ·{" "}
+            <a href="/termos.html" target="_blank" rel="noreferrer">
+              Condições da demonstração
+            </a>
+          </small>
           <InstallApp />
         </div>
         <div className="welcome-art">
@@ -2942,6 +2951,9 @@ function TripDetail({
           <div className="detail-facts">
             <Badge status={t.status} />
             <span>
+              {t.currentCycle ? `Volta ${t.currentCycle}` : "Aguardando início"}
+            </span>
+            <span>
               <Clock size={16} />
               {eta?.available
                 ? `${eta.minMinutes}–${eta.maxMinutes} min ${eta.simulated ? "· simulado" : ""}`
@@ -2964,6 +2976,20 @@ function TripDetail({
                 O veículo está parado em local seguro.
               </label>
               <div className="operation-buttons">
+                {t.currentCycle > 0 && t.status === "in_progress" && (
+                  <button
+                    className="button secondary"
+                    disabled={!safe || Date.now() >= t.plannedEnd}
+                    onClick={() =>
+                      run(`/trips/${t.id}/cycles`, {
+                        expectedCycle: t.currentCycle,
+                        safe: true,
+                      })
+                    }
+                  >
+                    Iniciar próxima volta
+                  </button>
+                )}
                 {transitions[t.status]
                   .filter((s) => s !== "cancelled" || d.actor.role === "admin")
                   .map((s) => (
@@ -3004,6 +3030,26 @@ function TripDetail({
                   <Bell size={15} /> Avisar passageiros
                 </button>
               </div>
+              <div className="detail-facts" aria-label="Espera por parada">
+                {t.snapshot.stops.map((stop) => (
+                  <span key={stop.id}>
+                    {stop.name}:{" "}
+                    {d.waiting?.find(
+                      (w) =>
+                        w.tripId === t.id &&
+                        w.cycle === t.currentCycle &&
+                        w.stopId === stop.id,
+                    )?.count || 0}{" "}
+                    aguardando
+                  </span>
+                ))}
+              </div>
+              {t.currentCycle > 0 && (
+                <small>
+                  A próxima volta requer percurso confirmado e retorno à origem
+                  com o veículo parado. Após o horário final, encerre o serviço.
+                </small>
+              )}
               {d.actor.role === "driver" &&
                 t.status !== "scheduled" &&
                 t.trackingMode !== "simulation" && (

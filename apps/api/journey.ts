@@ -1,4 +1,6 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { googleRoute } from "./google-routes";
+import { saveWalkEstimate } from "./smart-alerts";
 import { visibleProgress } from "../../packages/domain/tracking";
 import { HTTPException } from "hono/http-exception";
 import * as s from "../../db/schema";
@@ -69,6 +71,7 @@ export async function journeyState(db: DB, actor: JourneyActor) {
     waitUntil: t.waitUntil,
     trackingMode: t.trackingMode,
     plannedEnd: t.plannedEnd,
+    currentCycle: t.currentCycle,
   }));
   const active = all.filter(
     (t) =>
@@ -141,7 +144,47 @@ export async function journeyState(db: DB, actor: JourneyActor) {
         )
     : [];
   const read = new Set(receipts.map((r) => r.noticeId));
+  const waiting = trip
+    ? (
+        await db
+          .select({
+            stopId: s.studentCheckins.stopId,
+            expiresAt: s.studentCheckins.expiresAt,
+          })
+          .from(s.studentCheckins)
+          .where(
+            and(
+              eq(s.studentCheckins.orgId, actor.orgId),
+              eq(s.studentCheckins.subject, actor.userId),
+              eq(s.studentCheckins.tripId, trip.id),
+              eq(s.studentCheckins.cycle, trip.currentCycle),
+              gt(s.studentCheckins.expiresAt, Date.now()),
+            ),
+          )
+      )[0] || null
+    : null;
   return {
+    checkin: waiting,
+    alerts: await db.all<{
+      id: string;
+      message: string;
+      category: string;
+      createdAt: number;
+      cycle: number;
+    }>(
+      sql`SELECT id,message,category,created_at AS createdAt,cycle FROM journey_alerts WHERE org_id=${actor.orgId} AND subject=${actor.userId} AND route_id=${selected?.routeId || ""} AND expires_at>${Date.now()} ORDER BY created_at DESC LIMIT 30`,
+    ),
+    walkEstimate:
+      (
+        await db.all<{
+          seconds: number;
+          calculatedAt: number;
+          validUntil: number;
+          cycle: number;
+        }>(
+          sql`SELECT seconds,calculated_at AS calculatedAt,valid_until AS validUntil,cycle FROM walk_estimates WHERE org_id=${actor.orgId} AND subject=${actor.userId} AND trip_id=${trip?.id || ""} AND cycle=${trip?.currentCycle || 0} AND stop_id=${selected?.stopId || ""}`,
+        )
+      )[0] || null,
     name: actor.name,
     school: org.name,
     margin: org.safetyMargin,
@@ -155,6 +198,7 @@ export async function journeyState(db: DB, actor: JourneyActor) {
           status: trip.status,
           snapshot: trip.snapshot,
           waitUntil: trip.waitUntil,
+          currentCycle: trip.currentCycle,
         }
       : null,
     position: location || null,
@@ -188,7 +232,19 @@ export async function saveSelection(
     subject: actor.userId,
     selected: true,
   };
+  await db.run(
+    sql`DELETE FROM walk_estimates WHERE org_id=${actor.orgId} AND subject=${actor.userId} AND (route_id<>${choice.routeId} OR stop_id<>${choice.stopId} OR ${choice.notify ? 0 : 1}=1)`,
+  );
   await db.batch([
+    db
+      .delete(s.studentCheckins)
+      .where(
+        and(
+          eq(s.studentCheckins.orgId, actor.orgId),
+          eq(s.studentCheckins.subject, actor.userId),
+          sql`(${s.studentCheckins.tripId} NOT IN (SELECT id FROM trips WHERE org_id=${actor.orgId} AND route_id=${choice.routeId}) OR ${s.studentCheckins.stopId}<>${choice.stopId})`,
+        ),
+      ),
     db
       .update(s.journeyPreferences)
       .set({ selected: false })
@@ -216,6 +272,7 @@ export async function walkToSelection(
   actor: JourneyActor,
   position: Point,
   endpoint?: string,
+  googleKey?: string,
 ) {
   const state = await journeyState(db, actor),
     pref = state.preferences.find((p) => p.selected);
@@ -228,19 +285,34 @@ export async function walkToSelection(
       message: "Selecione uma rota e parada disponíveis",
     });
   const local = calculateLocalRoute([position, stop], "pedestrian");
-  if (!local && !endpoint)
+  if (!local && !endpoint && !googleKey)
     return {
       available: false,
       reason: "Fora da cobertura caminhável ou sem conexão por vias públicas.",
     };
   try {
-    const walking =
-      local ??
-      (await calculateRoute(endpoint!, [position, stop], "pedestrian"));
+    const walking = googleKey
+      ? await googleRoute(googleKey, [position, stop], "WALK")
+      : (local ??
+        (await calculateRoute(endpoint!, [position, stop], "pedestrian")));
+    // Routes duration is provider content, not a permitted coordinate cache.
+    // In Google mode the student may supply a separate, habitual walking time.
+    if (!googleKey && state.trip?.currentCycle && pref?.notify)
+      await saveWalkEstimate(db, {
+        orgId: actor.orgId,
+        subject: actor.userId,
+        tripId: state.trip.id,
+        cycle: state.trip.currentCycle,
+        routeId: pref.routeId,
+        stopId: pref.stopId,
+        seconds: walking.seconds,
+      });
     return {
       available: true,
       ...walking,
       margin: state.margin,
+      calculatedAt: Date.now(),
+      validUntil: Date.now() + 600000,
       recommendation: departure(
         state.eta?.minMinutes ?? null,
         walking.seconds,

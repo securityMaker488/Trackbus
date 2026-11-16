@@ -1,6 +1,8 @@
 # Arquitetura TrackBus
 React19/TypeScript estrito no shell Vinext/Vite existente. React Router organiza a aplicação, TanStack Query sincroniza dados, RHF e Zod validam formulários/entrada. MapLibre renderiza mapas, Drizzle/Hono atendem Cloudflare Workers+D1. Expo58/React Native cuidam do Driver.
 
+V11 mantém essa arquitetura. `Map.tsx` seleciona MapLibre/Google por configuração segura; Google SDK/Places é carregado sob demanda e Routes fica no backend. `worker.scheduled` processa alertas e fila cifrada em D1 com lotes pequenos. GPS não executa distribuição de notificações. Não foram adicionados microserviços, plano pago ou servidor permanente. [Google](GOOGLE_MAPS.md) · [Push](WEB_PUSH.md) · [Desempenho](PERFORMANCE.md).
+
 ```mermaid
 flowchart LR
   Admin[Gestão] --> Access[Cloudflare Access /entrar]

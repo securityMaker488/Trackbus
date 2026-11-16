@@ -27,3 +27,25 @@ Integração valida escopo institucional, visitante, pareamento, GPS, fechamento
 A auditoria npm consulta advisories atuais; scanner local é limitado a padrões e não é pentest. GitHub Actions/CodeQL não foram executados remotamente nesta etapa. Logs em work são locais e ficam fora do Git; resultados finais em V6-ENTREGA.md.
 
 V6.1 acrescenta oito testes de progresso/permanência e amplia integração de pareamento/GPS: posições sintéticas, relógio controlado, 120s até a espera, entrega via D1 ao aluno/motorista e retomada. E2E verifica a imagem oficial carregada e distância restante diminuindo na simulação. TypeScript detectou import ausente de inArray durante implementação; corrigido antes da suíte final. Verificações visuais suplementares são separadas dos cinco E2E.
+
+## Preparação para ensaios físicos V11
+
+Registro por aparelho: modelo, versão Android/iOS, navegador, versão APK, origem/API, rede, permissões e horário. Usar participantes autorizados e dados fictícios. Não há dispositivo Android conectado por ADB nesta etapa.
+
+| Cenário | Evidência a registrar | Estado |
+| --- | --- | --- |
+| Driver inicia GPS, bloqueia tela por pelo menos 5 min, aluno vê posições | Última atualização em ambos; contador de envios; horários | Pendente físico |
+| Rede interrompida, retomada e fim da viagem | Sem reproduzir posições antigas; nenhum novo envio após encerrar | Pendente físico |
+| Aluno autoriza GPS e calcula caminhada real | Percurso reconhecido e coerência do tempo, sem localização no motorista | Pendente físico/provedor |
+| Push com página fechada no Android | Recebimento no sistema, abertura da volta/parada e horário | Pendente físico/VAPID |
+| iPhone instalado pela Tela de Início | Permissão por ação do usuário e entrega fechada | Pendente físico/VAPID |
+| Dois participantes confirmam espera | Totais, cancelamento, expiração e nova volta sem nomes | Validado local; ensaio físico pendente |
+| Google Demo Key em avaliação | Busca, POIs, rota DRIVE/WALK, limite, erro e consentimento negado | Pendente chave local |
+
+Não publicar nem migrar o D1 remoto para executar estes testes sem autorização. O APK V11 requer a API V11; o Worker preservado continua na versão anterior. Não expor o servidor local com login simulado por túnel público. Testes Playwright com GPS controlado e contratos Google simulados são identificados somente como testes de software.
+
+## Resultado atual V11 — 16/11/2026
+
+88 testes de unidade/integração em 16 arquivos e 10 E2E aprovados. Typecheck web/Driver, lint, scanner limitado, auditoria npm completa web/Driver (0 ocorrências), build e dry-run passaram. Worker compilado local entregou 19 verificações HTTP/arquivos, recusou identidade forjada, serviu APK com hash esperado e executou Cron com outcome ok. Nenhum deploy, migração remota, segredo ou faturamento foi alterado. [Relatório completo](V11-AUDITORIA.md#resultado-da-fase-local--16112026) · [Evidência compilada](evidence/v11-compiled-local.json).
+
+E2E cobre também confirmação/cancelamento de espera, retorno pelo link da notificação e recusa de volta antiga. A suíte D1 verifica tetos de quatro itens por serviço, autorização antes de envio e aproximação sem caminhada. Isso não comprova 10 ms de CPU no plano Free nem entrega com página fechada; [PERFORMANCE.md](PERFORMANCE.md) delimita o alcance.

@@ -1,0 +1,108 @@
+{
+  "date": "2026-11-16",
+  "environment": "compiled Worker local, production auth, isolated local D1",
+  "results": [
+    {
+      "path": "/api/health",
+      "status": 200,
+      "forgedHeader": false
+    },
+    {
+      "path": "/api/auth/config",
+      "status": 200,
+      "forgedHeader": false
+    },
+    {
+      "path": "/api/state",
+      "status": 401,
+      "forgedHeader": false
+    },
+    {
+      "path": "/api/state",
+      "status": 401,
+      "forgedHeader": true
+    },
+    {
+      "path": "/entrar",
+      "status": 401,
+      "forgedHeader": false
+    },
+    {
+      "path": "/manifest.webmanifest",
+      "status": 200,
+      "forgedHeader": false
+    },
+    {
+      "path": "/sw.js",
+      "status": 200,
+      "forgedHeader": false
+    },
+    {
+      "path": "/privacidade.html",
+      "status": 200,
+      "forgedHeader": false
+    },
+    {
+      "path": "/termos.html",
+      "status": 200,
+      "forgedHeader": false
+    },
+    {
+      "path": "/_next/static/css/nhg15mcT.css",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/css/8pvpN_fc.css",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/CBQmqnKs.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/CcyWYbDU.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/B0PXqnjO.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/CwqJEvba.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/Crvooy-K.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/BaCmGOi7.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/B2PrfzI_.js",
+      "status": 200
+    },
+    {
+      "path": "/",
+      "status": 200,
+      "forgedHeader": false
+    }
+  ],
+  "apk": {
+    "bytes": 24116912,
+    "sha256": "4C15585AADA841DF26CE10C0C49F03864E1FDC5DCD363E3D8777AD05BE91B9D8"
+  },
+  "scheduled": {
+    "success": true,
+    "errors": [],
+    "messages": [],
+    "result": {
+      "outcome": "ok",
+      "noRetry": false
+    }
+  },
+  "remoteDeploy": false,
+  "physicalGps": false,
+  "edgeCpuMeasured": false
+}

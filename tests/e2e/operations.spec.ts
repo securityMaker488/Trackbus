@@ -154,7 +154,9 @@ test("cadastro persiste após recarregar; mapa, editor e páginas abrem", async 
     .fill("EET" + suffix[0] + "A" + suffix.slice(1));
   await page.getByLabel("Marca e modelo").fill("Teste Volare");
   await page.getByRole("button", { name: "Salvar registro" }).click();
-  await expect(page.getByRole("button", { name: "Salvar registro" })).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Salvar registro" }),
+  ).toBeHidden();
   await page.getByLabel("Buscar registros").fill("Veículo E2E " + suffix);
   await expect(page.getByText("Veículo E2E " + suffix)).toBeVisible();
   await page.reload();
@@ -280,6 +282,41 @@ test("apelido, rota e parada persistem; simulador, caminhada sobre ruas e posiç
       .selectOption(sample.stops[1].id);
     await guest.getByLabel("Favoritar rota e parada").check();
     await guest.getByRole("button", { name: "Salvar escolha" }).click();
+    await guest
+      .getByRole("button", {
+        name: "Estou aguardando nesta parada",
+        exact: true,
+      })
+      .click();
+    await expect(
+      guest.getByRole("button", {
+        name: "Cancelar minha confirmação",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await guest.reload();
+    await expect(
+      guest.getByRole("button", {
+        name: "Cancelar minha confirmação",
+        exact: true,
+      }),
+    ).toBeVisible();
+    const confirmed = await (await admin.request.get("/api/state")).json();
+    expect(
+      confirmed.waiting.some(
+        (w: { stopId: string; count: number }) =>
+          w.stopId === sample.stops[1].id && w.count === 1,
+      ),
+    ).toBe(true);
+    await guest
+      .getByRole("button", { name: "Cancelar minha confirmação", exact: true })
+      .click();
+    await expect(
+      guest.getByRole("button", {
+        name: "Estou aguardando nesta parada",
+        exact: true,
+      }),
+    ).toBeVisible();
     await admin
       .locator(".trip-card")
       .filter({ hasText: "Horizonte 01" })
@@ -334,6 +371,32 @@ test("apelido, rota e parada persistem; simulador, caminhada sobre ruas e posiç
       path: "work/smart-journey-v3.png",
       fullPage: true,
     });
+    const noticeTrip = d.trips.find(
+      (t: { routeId: string; status: string }) =>
+        t.routeId === sample.id && t.status === "in_progress",
+    );
+    await guest.goto(
+      `/#/map?trip=${noticeTrip.id}&cycle=${noticeTrip.currentCycle}&stop=${sample.stops[1].id}`,
+    );
+    await guest.reload();
+    await expect
+      .poll(async () => {
+        const state = await (
+          await guest.request.get("/api/journey/state")
+        ).json();
+        return state.preferences.find((p: { selected: boolean }) => p.selected)
+          ?.routeId;
+      })
+      .toBe(sample.id);
+    await guest.goto(
+      `/#/map?trip=${noticeTrip.id}&cycle=999&stop=${sample.stops[1].id}`,
+    );
+    await guest.reload();
+    await expect(
+      guest.getByText(
+        "Este aviso é de uma viagem ou volta anterior. Consulte a situação atual.",
+      ),
+    ).toBeVisible();
   } finally {
     await guestContext.close();
     await adminContext.close();

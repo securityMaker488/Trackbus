@@ -11,6 +11,14 @@ const vars = config.vars || {},
   db = config.d1_databases?.find((d) => d.binding === "DB");
 const pending = [];
 if (
+  vars.GOOGLE_MAPS_MODE === "demo" ||
+  vars.GOOGLE_MAPS_DEMO_KEY ||
+  ["development", "evaluation"].includes(vars.APP_ENV)
+)
+  pending.push(
+    "Demo Key é exclusiva do ambiente local/avaliação, não deste Worker de produção",
+  );
+if (
   config.assets?.binding !== "ASSETS" ||
   !Array.isArray(config.assets?.run_worker_first) ||
   !config.assets.run_worker_first.includes("/api/*") ||

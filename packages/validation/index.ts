@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { project } from "../domain";
 const name = z.string().trim().min(2).max(100),
   id = z.string().min(1).max(100);
 export const stopSchema = z
@@ -12,9 +13,13 @@ export const stopSchema = z
       .object({
         id: z.string().max(100),
         name: z.string().min(1).max(100),
-        source: z.literal("OpenStreetMap"),
+        source: z.enum(["OpenStreetMap", "Google Maps"]),
       })
       .strict()
+      .refine(
+        (r) => r.source !== "Google Maps" || r.name === "Referência Google",
+        "Salve somente o identificador do local Google; nomes e detalhes são consultados no mapa.",
+      )
       .optional(),
   })
   .strict();
@@ -30,9 +35,23 @@ export const routeSchema = z
     stops: z.array(stopSchema).min(2).max(50),
     active: z.boolean().default(true),
     expectedVersion: z.number().int().positive().optional(),
+    drawing: z
+      .array(
+        z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]),
+      )
+      .min(2)
+      .max(1000)
+      .optional(),
+    adjustDrawing: z.boolean().default(false),
   })
   .strict()
   .superRefine((r, c) => {
+    if (r.drawing && r.stops.some((s) => project(s, r.drawing!).offset > 150))
+      c.addIssue({
+        code: "custom",
+        message:
+          "Todas as paradas devem ficar a até 150 m do desenho. Ajuste as paradas ou limpe o desenho.",
+      });
     if (
       new Set(r.stops.map((s) => s.id)).size !== r.stops.length ||
       new Set(r.stops.map((s) => `${s.lat.toFixed(5)},${s.lng.toFixed(5)}`))

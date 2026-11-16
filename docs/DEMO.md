@@ -9,7 +9,7 @@ Somente dados fictícios. Notebook da gestão, Android arm64 autorizado, navegad
 3. A apresentação V7 começa sem rotas. Crie origem, paradas e destino ao vivo pelo mapa, salve e publique.
 4. Programe uma viagem em modo GPS real, com veículo e motorista disponíveis. Simulação usa outra viagem.
 5. Escolha um trecho seguro e confira cobertura caminhável; a área do Açude Velho em Campina possui grafo local. Confira paradas e limite de espera até 300s.
-6. Configurações → Conectar o motorista: gerar código, instalar APK 7.1 e parear com a origem HTTPS. Confirmar atribuição da viagem.
+6. Configurações → Conectar o motorista: gerar código, instalar APK V11 com backend compatível e parear com a origem HTTPS. Confirmar atribuição da viagem.
 7. Abrir /#/participar no segundo navegador, informar apelido e escola.
 
 ## Apresentação
@@ -32,7 +32,7 @@ Sem internet não há sincronização entre aparelhos, ainda que cálculo local 
 
 ## Ensaio adicional de progresso e permanência
 
-Com o Driver 7.1, iniciar GPS em viagem atribuída. O mapa do aluno deve manter o marcador na posição recebida e diminuir a linha amarela restante. Estacionar em segurança junto a uma parada configurada, manter GPS/internet e aguardar pelo menos2min de leituras contínuas: deve aparecer “Aguardando no ponto”. Movimentar-se novamente, ou interromper a viagem: a indicação deve desaparecer. Aguardar5min continua sendo ação manual separada. Conferir que a ausência de sinal jamais confirma a permanência automaticamente. Registrar fabricante/Android, permissões, bateria, duração e resultado do bloqueio de tela; este ensaio físico ainda não foi executado.
+Com o Driver V11 e backend compatível, iniciar GPS em viagem atribuída. O mapa do aluno deve manter o marcador na posição recebida e diminuir a linha amarela restante. Estacionar em segurança junto a uma parada configurada, manter GPS/internet e aguardar pelo menos2min de leituras contínuas: deve aparecer “Aguardando no ponto”. Movimentar-se novamente, ou interromper a viagem: a indicação deve desaparecer. Aguardar5min continua sendo ação manual separada. Conferir que a ausência de sinal jamais confirma a permanência automaticamente. Registrar fabricante/Android, permissões, bateria, duração e resultado do bloqueio de tela; este ensaio físico ainda não foi executado.
 
 
 ## Mostrar o novo editor e a colaboração
@@ -42,3 +42,15 @@ Com o Driver 7.1, iniciar GPS em viagem atribuída. O mapa do aluno deve manter 
 3. Criar cinco pontos, mostrar Explorar mapa, desfazer/refazer e reordenação. Pré-visualizar vias e explicar qualquer aviso de cobertura.
 4. No Driver conectado, abrir “Criar ou revisar rotas”, salvar outro rascunho e enviar para aprovação. Na gestão, revisar, aprovar e publicar. No aluno, atualizar e escolher a nova rota.
 5. Arquivar somente as rotas descartáveis criadas no ensaio; não apagar dados de terceiros. Voltar ao roteiro GPS/avisos acima.
+
+## Ensaio V11 para a FECT — 30/11 e 01/12/2026
+
+1. Antes do evento, configurar/homologar Google conforme GOOGLE_MAPS.md. Sem chave, apresentar honestamente o mapa existente; não anunciar Google ativo ou offline.
+2. Criar rota por cliques, pesquisar estabelecimentos quando Google estiver habilitado, desenhar um rascunho e mostrar a diferença para caminho viário. Publicar e selecionar no aluno.
+3. Usar APK V11 pareado; iniciar GPS, bloquear a tela e registrar resultado do ensaio físico. Mover-se apenas em área segura.
+4. Dois participantes confirmam espera na mesma parada. Mostrar quantidade no motorista, cancelar uma confirmação, conferir expiração sem revelar nomes.
+5. Calcular caminhada ou informar tempo habitual. Ativar push e confirmar inscrição. Fechar a página e provocar um aviso operacional; verificar chegada real, horário e abertura da viagem. Repetir Smart Departure dentro da validade de dez minutos. Falha de entrega deve ser registrada, nunca substituída por aviso simulado como se fosse push real.
+6. Completar percurso, retornar à origem, parar em segurança e confirmar nova volta dentro do horário. Conferir contador, histórico, check-ins antigos removidos e necessidade de atualizar caminhada. A volta não reinicia automaticamente por aproximação.
+7. Registrar espera de cinco minutos e conferir encerramento mesmo com as páginas fechadas, pelo Cron. Encerrar viagem/GPS e preservar histórico.
+
+Contingência: preparar notebook com dependências instaladas, build e D1 local. Simulador utiliza dados explicitamente fictícios; não comprova GPS real. Sem internet, tiles Google/OSM, sincronização e push não são garantidos. Preferir uma apresentação local previamente ensaiada e capturas reais identificadas, sem prometer conectividade inexistente.

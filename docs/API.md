@@ -41,7 +41,7 @@ Identidade institucional vem de JWT Cloudflare Access verificado no modo própri
 `GET /journey/state` exige papel student e retorna catálogo publicado, preferências, viagem selecionada, posição, ETA e avisos.
 `POST /journey/select` recebe {routeId,stopId,favorite,notify}.
 `POST /journey/walk` recebe {lat,lng}; parada é validada na preferência. A coordenada não é persistida.
-`POST /journey/push` recebe {endpoint,enabled}.
+`POST /journey/push` recebe {endpoint,enabled,keys:{p256dh,auth},privatePreview,smart,operational,approaching}; chaves são obrigatórias para ativar, preferências opcionais. Desativar exige a mesma sessão proprietária.
 `POST /journey/room` exige admin demo; {roomOpen,safetyMargin:1..15}.
 `POST /journey/prepare` prepara circuitos fictícios sem apagar histórico.
 Portal legado de responsável mantém `POST /walking` com {tripId,studentId,lat,lng}.
@@ -70,3 +70,15 @@ V6.1: `/journey/state` retorna `progress` da viagem visível; `/driver/trips` in
 - `POST /driver/editor-logout {}`: encerra somente o acesso ao editor. Revogar o aparelho também invalida seus editores.
 
 Sessão editor acessa apenas me/state, POIs e edição/envio de rotas próprias; não transmite GPS, não gerencia usuários e não troca papel. expectedVersion impede salvar sobre edição mais recente. Approval/createdBy/published não são aceitos do formulário de criação. Viagens só podem ser programadas sobre rotas aprovadas.
+
+## V11
+
+- `GET /maps/config`: autenticado; provedor, chave pública de navegador e map ID quando configurados. Nunca retorna `GOOGLE_ROUTES_KEY`.
+- Rotas/preview aceitam `drawing: [lng,lat][]` de 2..1000 pontos e `adjustDrawing:boolean`; paradas precisam estar próximas do desenho. O desenho não promete navegabilidade. Google Routes é chamado só quando habilitado, com limite institucional.
+- `POST /trips/:id/cycles {expectedCycle,safe:true}`: admin ou motorista atribuído, CAS de versão/volta, valida percurso/GPS/horário. Retorna conflito quando não é seguro iniciar outra volta.
+- `POST /journey/checkin {tripId,cycle,stopId,active}`: aluno autorizado, seleção vigente, validade de 15 minutos, operação idempotente. `/state` e `/driver/trips` retornam `waiting` agregado e ciclos, sem identidade do aluno.
+- `POST /journey/walk-estimate {minutes}`: tempo habitual de 1..180 min informado pelo aluno para sua seleção ativa; estimativa válida por dez minutos, sem coordenadas.
+- `POST /journey/push/status {endpoint}`: confirma somente inscrição da própria sessão e suas preferências; inscrição de outra pessoa não é transferida.
+- `/journey/state`: `currentCycle`, confirmação própria, estimativa e alertas privados. O link de push valida viagem/volta/parada visíveis antes de restaurar a seleção; links antigos mostram aviso.
+
+O Cron não é uma rota pública. Ele concilia fim de espera, expiração cartográfica e fila/alertas. Localização anterior à volta atual recebe 422, sem ser exibida como GPS novo.

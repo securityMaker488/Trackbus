@@ -17,6 +17,9 @@ export type Trip = {
   name: string;
   status: string;
   trackingMode: string;
+  currentCycle: number;
+  plannedEnd: number;
+  waiting: { stopId: string; cycle: number; count: number }[];
   stops: { id: string; name: string }[];
   progress?: {
     alongMeters: number;

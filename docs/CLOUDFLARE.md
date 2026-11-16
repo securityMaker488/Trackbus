@@ -1,5 +1,11 @@
 # Cloudflare próprio — TrackBus V7
 
+## Estado preservado em 16/11/2026
+
+O proprietário determinou **não publicar a V11 em produção nesta etapa**. Worker `trackbus-demonstracao`, D1, domínio, Access, secrets e faturamento remoto foram preservados. As consultas desta etapa foram somente leitura; as migrações novas (0007..0013), Cron e VAPID permanecem preparadas localmente. Não executar os comandos de publicação abaixo sem nova autorização. A mediana de 2,42 ms e zero erros informados pelo usuário correspondem ao deploy existente, não validam CPU do V11. [Desempenho e limites gratuitos](PERFORMANCE.md).
+
+O APK público anterior continua sendo V7. O APK V11 foi compilado localmente; só deve ser alinhado a um backend V11 após autorização e ensaio. Google Demo Key é bloqueada no modo produção e não foi configurada no Worker atual. Nenhum segredo Google/VAPID foi instalado remotamente.
+
 Publicado na conta autorizada: https://trackbus-demonstracao.goldensla6.workers.dev. D1 exclusivo `trackbus-demo`, migrações `0000` a `0006` aplicadas. Login administrativo real validado em 14/11/2026, com Access restrito ao proprietário e sessão de seis horas. A aplicação foi inicializada sem rotas; a rota temporária usada no ensaio foi arquivada, preservando histórico.
 
 Evidências: `evidence/cloudflare-published-smoke.json` e `evidence/cloudflare-student-published.json`. Login, cadastro/publicação no D1, aluno independente, escolha/favorito, restrição administrativa, posição simulada, ETA e aviso de atraso passaram. GPS físico e segundo plano Android continuam pendentes de aparelho. APK disponível em `/TrackBus-Driver-v7-arm64.apk`; hash em `V7-ENTREGA.md`.
@@ -50,7 +56,7 @@ npx wrangler d1 migrations apply DB --remote --config wrangler.cloudflare.jsonc
 npm run cloudflare:deploy
 ```
 
-São necessárias as migrações `0000` até `0006`; a última adiciona `routes.archived_at`. Nenhuma cria rotas de apresentação automaticamente. Após entrar por `/entrar`, o administrador inicial usa **Configurar apresentação**; a escola nasce sem rotas/viagens, com um veículo e um motorista fictícios para facilitar o ensaio.
+Uma publicação futura da V11 requer migrações `0000` até `0013`, conforme DATABASE.md. O deploy V7 preservado usa somente `0000`..`0006`. Nenhuma cria rotas de apresentação automaticamente. Após entrar por `/entrar`, o administrador inicial usa **Configurar apresentação**; a escola nasce sem rotas/viagens, com um veículo e um motorista fictícios para facilitar o ensaio.
 
 Não copie o D1 local de testes para produção. Caso uma instalação anterior já tenha exemplos, use **Rotas e paradas → Remover rota**. A ação arquiva, mantém versões/histórico e cancela viagens abertas na demonstração. Instituições fora de demonstração exigem encerrar viagens em execução antes de arquivar.
 

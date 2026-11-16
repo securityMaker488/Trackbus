@@ -47,7 +47,9 @@ export function trackJourney(
     gap = previous ? p.timestamp - previous.timestamp : 0;
   const offRoute = projected.offset > Math.max(60, p.accuracy * 2);
   const quality =
-    p.accuracy <= 35 && (route.routed || p.source === "simulation");
+    p.accuracy <= 35 &&
+    (route.routed || p.source === "simulation") &&
+    (!route.geometryExpiresAt || route.geometryExpiresAt > p.timestamp);
   const delta = projected.along - (prior?.alongMeters ?? projected.along);
   const plausible =
     !previous ||

@@ -4,7 +4,16 @@
 
 Plataforma de transporte escolar da **I.See Technologies**, preparada para demonstração técnica na **FECT e Congretech, em Campina Grande/PB**. Gestão cria rotas no mapa; alunos da mesma escola escolhem rota e parada; Smart Journey combina posição do ônibus, caminhada, estimativas e avisos.
 
-Esta atualização preserva o projeto e o histórico anteriores. [Demonstração publicada no Cloudflare](https://trackbus-demonstracao.goldensla6.workers.dev) · [Entrada administrativa protegida](https://trackbus-demonstracao.goldensla6.workers.dev/entrar) · [APK Android arm64](https://trackbus-demonstracao.goldensla6.workers.dev/TrackBus-Driver-v71-arm64.apk). Estado de publicação e verificações em [Cloudflare](docs/CLOUDFLARE.md); relatório da etapa local em [V7](docs/V7-ENTREGA.md). Há somente três perfis ativos: aluno, motorista e administrador. A apresentação começa sem rotas, para criação ao vivo. Não foi realizado push ao GitHub nesta etapa.
+Esta atualização preserva o projeto e o histórico anteriores. [Demonstração no Cloudflare](https://trackbus-demonstracao.goldensla6.workers.dev) · [Entrada administrativa protegida](https://trackbus-demonstracao.goldensla6.workers.dev/entrar). Estado de publicação em [Cloudflare](docs/CLOUDFLARE.md); auditoria e evidências em [V11](docs/V11-AUDITORIA.md). Há somente três perfis ativos: aluno, motorista e administrador. A apresentação começa sem rotas, para criação ao vivo. Não foi realizado push ao GitHub nesta etapa.
+
+## V11 — preparação para 30/11 e 01/12/2026
+
+- Google Maps, Places New e Routes integrados por adaptador: pesquisa mundial, estabelecimentos, mapa e cálculo viário. Demo Key limitada a desenvolvimento/avaliação, bloqueada em produção. **Aguardam chave local e validação real**; nenhuma cobrança foi ativada. [APIs e variáveis](docs/GOOGLE_MAPS.md).
+- Editor existente preservado e ampliado com desenho livre, simplificação, desfazer/refazer e ajuste viário opcional. Desenho manual é identificado como esquemático.
+- [Voltas separadas](docs/TRIP_CYCLES.md), histórico, proteção contra repetição e fim da janela operacional. Nova volta exige confirmação segura, sem reinício por um único GPS.
+- [Confirmação de espera](docs/STUDENT_CHECKINS.md), cancelamento, expiração de 15 minutos e somente contagens para o motorista.
+- [Web Push](docs/WEB_PUSH.md) cifrado, preferências, fila durável, revogação e Cron. Smart Departure usa estimativa válida por dez minutos, sem guardar a posição do aluno. **Recebimento com página fechada ainda depende do ensaio físico**.
+- APK Android **11.0.0/code10** compilado e com assinatura verificada. [Instalação e limitações](docs/DRIVER.md). GPS em segundo plano ainda não homologado em dispositivo.
 
 ## Interface
 
@@ -29,9 +38,9 @@ Capturas de testes reais da aplicação local. Os E2E bloqueiam tiles externos d
 - Simulador separado de GPS e dados fictícios. Rotas de exemplo locais arquivadas com histórico preservado; novas instalações não criam trajetos automaticamente.
 - Embarques, ausências, calendário, manutenção, despesas, CSV e auditoria mantidos. Perfis antigos de responsável/monitor sem acesso nesta versão.
 
-## Mapas da Paraíba
+## Mapas e contingência existente
 
-Busca local nas **223 sedes municipais**, fonte IBGE, e navegação livre por coordenadas. Edição começa em Campina Grande. GPS e cadastro não são restritos a uma cidade.
+Com Google configurado, busca mundial por nomes parciais, locais e estabelecimentos. Até a ativação, o mapa existente mantém busca local nas **223 sedes municipais**, fonte IBGE, e navegação livre por coordenadas. Edição começa em Campina Grande. GPS e cadastro não são restritos a uma cidade. O catálogo OSM anterior foi preservado, sem expansão como substituto do Places.
 
 Circuito demonstrativo real de **871m** no Açude Velho, com rede OSM local para ônibus/pedestre. O recorte anterior de Salvador continua disponível. Isso **não significa roteamento estadual completo**: fora dos recortes conectados é necessário provedor Valhalla institucional ou a interface informa indisponibilidade/traçado esquemático. Pontos de apresentação precisam de inspeção presencial. [Mapas](docs/MAPS.md) · [proveniência Campina/IBGE](docs/geodata/CAMPINA_GRANDE.md).
 
@@ -46,7 +55,7 @@ apps/web       Interface, mapa e Smart Journey
 apps/api       API, autorização, viagens, jornada e avisos
 apps/driver    Pacote nativo Expo independente
 packages       Domínio, validação, tipos e geodados
-db / drizzle   Modelo D1 e migrações0000..0008
+db / drizzle   Modelo D1 e migrações0000..0013
 worker         Worker principal e gateway opcional
 tests          Unitários, integração D1 local e E2E
 docs           Arquitetura, operação e evidências
@@ -83,7 +92,7 @@ npm audit --prefix apps/driver
 ## Driver, deploy e segurança
 
 [Instalar e compilar Driver](docs/DRIVER.md) · [Cloudflare próprio](docs/CLOUDFLARE.md) · [Sites e execução local](docs/DEPLOYMENT.md) · [segurança](docs/SECURITY.md).
-APK 7.1 compilado, mas GPS com tela bloqueada exige ensaio físico ainda pendente. O modo Cloudflare próprio verifica JWT Access para a equipe e mantém sessões restritas de aluno/Driver. O modo Sites continua dependendo do gateway confiável. Nenhum segredo deve ir para cliente/Git.
+APK V11 compilado, mas GPS com tela bloqueada exige ensaio físico ainda pendente. O modo Cloudflare próprio verifica JWT Access para a equipe e mantém sessões restritas de aluno/Driver. O modo Sites continua dependendo do gateway confiável. Chaves privadas jamais vão para cliente/Git; a chave pública do SDK Google exige restrições por origem/API/quota.
 
 ## Documentação
 

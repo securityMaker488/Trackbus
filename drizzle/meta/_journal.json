@@ -64,6 +64,41 @@
       "when": 1794690000000,
       "tag": "0008_route_geometry_metadata",
       "breakpoints": true
+    },
+    {
+      "tag": "0009_trip_cycles_checkins",
+      "idx": 9,
+      "breakpoints": true,
+      "when": 1794700000000,
+      "version": "6"
+    },
+    {
+      "breakpoints": true,
+      "tag": "0010_smart_push",
+      "when": 1794700100000,
+      "version": "6",
+      "idx": 10
+    },
+    {
+      "tag": "0011_google_geometry_expiry",
+      "version": "6",
+      "when": 1794700200000,
+      "idx": 11,
+      "breakpoints": true
+    },
+    {
+      "tag": "0012_wait_dispatch_indexes",
+      "version": "6",
+      "when": 1794700300000,
+      "idx": 12,
+      "breakpoints": true
+    },
+    {
+      "tag": "0013_approaching_schedule",
+      "version": "6",
+      "when": 1794700400000,
+      "idx": 13,
+      "breakpoints": true
     }
   ]
 }

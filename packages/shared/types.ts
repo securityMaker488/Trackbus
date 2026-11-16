@@ -26,6 +26,8 @@ export type State = {
   routes: Route[];
   students: (typeof S.students.$inferSelect)[];
   trips: Trip[];
+  cycles: (typeof S.tripCycles.$inferSelect)[];
+  waiting: { tripId: string; cycle: number; stopId: string; count: number }[];
   locations: (typeof S.locations.$inferSelect)[];
   notices: (typeof S.notices.$inferSelect & { read: boolean })[];
   incidents: (typeof S.incidents.$inferSelect)[];

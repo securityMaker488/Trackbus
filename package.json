@@ -24,6 +24,7 @@
     "cloudflare:deploy": "npm run cloudflare:check && npm run build && wrangler deploy --config wrangler.cloudflare.jsonc"
   },
   "dependencies": {
+    "@block65/webcrypto-web-push": "2.0.0",
     "@tanstack/react-query": "5.105.3",
     "drizzle-orm": "0.45.2",
     "hono": "4.13.16",
@@ -45,6 +46,7 @@
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.64.1",
     "@tailwindcss/postcss": "4.2.1",
+    "@types/google.maps": "3.66.10",
     "@types/node": "22.19.19",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.2.3",

@@ -9,12 +9,19 @@ export type TripStatus =
   | "completed"
   | "cancelled";
 export type Point = { lat: number; lng: number };
-export type Stop = Point & { id: string; name: string; dwellSeconds: number; reference?: {id: string; name: string; source: string} };
+export type Stop = Point & {
+  id: string;
+  name: string;
+  dwellSeconds: number;
+  reference?: { id: string; name: string; source: string };
+};
 export type Itinerary = {
   name: string;
   stops: Stop[];
   geometry: [number, number][];
   routed: boolean;
+  geometrySource?: string;
+  geometryExpiresAt?: number | null;
 };
 export type Position = Point & {
   accuracy: number;
@@ -129,6 +136,8 @@ export function estimateArrival(input: {
     simulated: p?.source === "simulation",
   });
   if (!p) return no("Posição do ônibus indisponível");
+  if (r.geometryExpiresAt && r.geometryExpiresAt <= now)
+    return no("Trajeto do provedor expirado. A gestão deve recalcular a rota.");
   if (now - p.timestamp > 60000) return no("Localização desatualizada");
   if (!["in_progress", "paused", "interrupted"].includes(input.status))
     return no("Viagem fora de operação");
