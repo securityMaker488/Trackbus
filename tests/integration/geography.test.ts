@@ -204,27 +204,37 @@ it("rejeita horário inválido e coordenadas inválidas sem gravar", async () =>
       .first(),
   ).toBeNull();
 });
-it("busca geocoding via Nominatim para localidades fora da PB", async () => {
+it("busca geocoding via Photon para localidades fora da PB", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn<typeof fetch>().mockResolvedValue(
       new Response(
-        JSON.stringify([
-          {
-            place_id: 1,
-            display_name: "São Paulo, SP, Brasil",
-            lat: "-23.5505",
-            lon: "-46.6333",
-            type: "city",
-          },
-          {
-            place_id: 2,
-            display_name: "São Bernardo do Campo, SP, Brasil",
-            lat: "-23.6914",
-            lon: "-46.5644",
-            type: "city",
-          },
-        ]),
+        JSON.stringify({
+          features: [
+            {
+              osm_id: 1,
+              osm_type: "N",
+              name: "São Paulo",
+              country: "Brasil",
+              state: "SP",
+              city: "São Paulo",
+              lon: -46.6333,
+              lat: -23.5505,
+              type: "city",
+            },
+            {
+              osm_id: 2,
+              osm_type: "N",
+              name: "São Bernardo do Campo",
+              country: "Brasil",
+              state: "SP",
+              city: "São Bernardo do Campo",
+              lon: -46.55,
+              lat: -23.7,
+              type: "city",
+            },
+          ],
+        }),
         { status: 200, headers: { "content-type": "application/json" } },
       ),
     ),
@@ -239,8 +249,8 @@ it("busca geocoding via Nominatim para localidades fora da PB", async () => {
   }[];
   expect(data).toHaveLength(2);
   expect(data[0]).toMatchObject({
-    id: "1",
-    name: "São Paulo, SP, Brasil",
+    id: "N:1",
+    name: "São Paulo, São Paulo, SP, Brasil",
     lat: -23.5505,
     lng: -46.6333,
   });

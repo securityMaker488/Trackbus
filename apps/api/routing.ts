@@ -22,54 +22,87 @@ const responseSchema = z.object({
     )
     .min(1),
 });
-const nominatimResultSchema = z.object({
-  place_id: z.number(),
-  display_name: z.string(),
-  lat: z.string(),
-  lon: z.string(),
+const photonResultSchema = z.object({
+  osm_id: z.number(),
+  osm_type: z.string(),
+  name: z.string(),
+  country: z.string(),
+  state: z.string().optional(),
+  city: z.string().optional(),
+  postcode: z.string().optional(),
+  lon: z.number(),
+  lat: z.number(),
   type: z.string(),
-  importance: z.number().optional(),
 });
-const nominatimResponseSchema = z.array(nominatimResultSchema);
+const photonResponseSchema = z.object({
+  features: z.array(photonResultSchema),
+});
 
-/** Free geocoding via Nominatim (OSM). Rate-limited by client and result-count. */
+/**
+ * Global rate limiter via KV (1 req/s per key, 10 req/min per key).
+ * Works across all Worker instances because KV is a shared, strongly-consistent store.
+ */
+const RATE_LIMIT_WINDOW_SEC = 60;
+const RATE_LIMIT_MAX_PER_WINDOW = 10;
+const SECOND_NS = 1_000_000_000n;
+async function globalRateLimit(
+  kv: { get: (key: string) => Promise<string | null>; put: (key: string, value: string, options?: { expirationTtl?: number }) => Promise<void> },
+  key: string,
+): Promise<void> {
+  const now = Date.now();
+  const windowKey = `rl:${key}:${Math.floor(now / 1000)}`;
+  const count = parseInt((await kv.get(windowKey)) || "0", 10);
+  if (count >= 1) {
+    const windowStart = Math.floor(now / 1000);
+    let totalInWindow = count;
+    for (let i = 1; i < RATE_LIMIT_WINDOW_SEC; i++) {
+      const k = `rl:${key}:${windowStart - i}`;
+      const v = parseInt((await kv.get(k)) || "0", 10);
+      totalInWindow += v;
+      if (totalInWindow >= RATE_LIMIT_MAX_PER_WINDOW) {
+        throw Error("Limite de busca geográfica atingido. Tente mais tarde.");
+      }
+    }
+    return;
+  }
+  await kv.put(windowKey, "1", { expirationTtl: RATE_LIMIT_WINDOW_SEC });
+}
+/** Free geocoding via Photon (OSM). Autocomplete-capable, rate-limited globally via KV. */
 export async function searchPlaces(
   query: string,
   limit = 10,
   transport: typeof fetch = fetch,
+  kv?: { get: (key: string) => Promise<string | null>; put: (key: string, value: string, options?: { expirationTtl?: number }) => Promise<void> },
 ): Promise<
-  { id: number; name: string; lat: number; lng: number; type: string }[]
+  { id: string; name: string; lat: number; lng: number; type: string }[]
 > {
   if (!query.trim() || query.trim().length < 2) return [];
-  const url = new URL("https://nominatim.openstreetmap.org/search");
+  if (kv) await globalRateLimit(kv, "searchPlaces");
+  const url = new URL("https://photon.komoot.io/api/");
   url.searchParams.set("q", query.trim());
-  url.searchParams.set("format", "json");
-  url.searchParams.set("limit", String(limit));
-  url.searchParams.set("accept-language", "pt-BR");
-  url.searchParams.set("addressdetails", "0");
-  url.searchParams.set("namedetails", "0");
-  url.searchParams.set("extratags", "0");
-  url.searchParams.set("polygon_geojson", "0");
+  url.searchParams.set("limit", String(Math.min(limit, 25)));
+  url.searchParams.set("lang", "pt");
   const response = await transport(url, {
     headers: {
       "User-Agent": "TrackBus/0.1 (institutional route planner; https://trackbus.app)",
       Accept: "application/json",
     },
     signal: AbortSignal.timeout(8000),
+    redirect: "manual",
   });
-  if (!response.ok) return [];
+  if (!response.ok || response.type === "opaqueredirect") return [];
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength > 200_000) return [];
-  const parsed = nominatimResponseSchema.safeParse(
+  const parsed = photonResponseSchema.safeParse(
     JSON.parse(new TextDecoder().decode(bytes)),
   );
   if (!parsed.success) return [];
-  return parsed.data.map((r) => ({
-    id: r.place_id,
-    name: r.display_name,
-    lat: Number(r.lat),
-    lng: Number(r.lon),
-    type: r.type,
+  return parsed.data.features.map((f) => ({
+    id: `${f.osm_type}:${f.osm_id}`,
+    name: [f.name, f.city, f.state, f.country].filter(Boolean).join(", "),
+    lat: f.lat,
+    lng: f.lon,
+    type: f.type,
   }));
 }
 export async function calculateRoute(

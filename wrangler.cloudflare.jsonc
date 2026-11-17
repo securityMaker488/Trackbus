@@ -13,6 +13,12 @@
   },
   "rules": [{ "type": "ESModule", "globs": ["**/*.js", "**/*.mjs"] }],
   "triggers": { "crons": ["* * * * *"] },
+  "kv_namespaces": [
+    {
+      "binding": "RATE_LIMIT_KV",
+      "id": "trackbus-rate-limit"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

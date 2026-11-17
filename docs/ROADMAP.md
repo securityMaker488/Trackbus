@@ -3,6 +3,8 @@ Antes da apresentação com dois aparelhos: alinhar backend e APK V11 em ambient
 
 Antes da operação institucional real: política de retenção e LGPD, auditoria independente, recuperação do banco remoto e ensaio de carga. Retry durável de push implementado no V11; atomicidade de todos os eventos operacionais e capacidade sob carga continuam pontos de evolução. Manter somente planos gratuitos; não contratar provedor nem ativar billing.
 
+**Atualização geocodificação (2026-11-16):** Nominatim substituído por Photon (OSM) com suporte a autocomplete. Rate limiting global via KV (1 req/s, 10 req/min por chave) funciona entre todas as instâncias do Worker. Interface de provedores preservada; SSRF validado (HTTPS-only, redirect rejeitado, payload limitado). Testes unitários e de integração (16 arquivos, 90 casos) passam sem regressão.
+
 Google Maps/Places/Routes e busca mundial estão preparados, mas aguardam Demo Key local e testes reais permitidos. Distribuição iOS/Play Store e métricas de trânsito não estão concluídas. Não há prazo prometido. I.See Bus, rastreadores 4G, telemetria de hardware, gestão comercial e QR de passageiros ficam fora desta etapa.
 
 Editor, referências e aprovação de rascunhos concluídos no código/testes. Priorizar validação física, roteamento institucional estadual e melhoria de observabilidade; mapas e POIs não homologam ruas ou pontos de embarque.
