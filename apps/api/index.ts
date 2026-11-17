@@ -59,6 +59,7 @@ type Actor = {
 export type Bindings = AccessConfig &
   MapsEnv & {
     DB: D1Database;
+    RATE_LIMIT_KV: KVNamespace;
     VALHALLA_URL?: string;
     VAPID_PUBLIC_KEY?: string;
     VAPID_PRIVATE_JWK?: string;
@@ -1633,7 +1634,7 @@ app.get("/geo/search", async (c) => {
   if (!query || query.trim().length < 2)
     return c.json([]);
   await limit(c.get("db"), "geo-search:" + c.get("actor").userId, 30);
-  const results = await searchPlaces(query, 10, fetch, c.get("RATE_LIMIT_KV"));
+  const results = await searchPlaces(query, 10, fetch, c.env.RATE_LIMIT_KV);
   return c.json(
     results.map((r) => ({
       id: String(r.id),

@@ -44,7 +44,6 @@ const photonResponseSchema = z.object({
  */
 const RATE_LIMIT_WINDOW_SEC = 60;
 const RATE_LIMIT_MAX_PER_WINDOW = 10;
-const SECOND_NS = 1_000_000_000n;
 async function globalRateLimit(
   kv: { get: (key: string) => Promise<string | null>; put: (key: string, value: string, options?: { expirationTtl?: number }) => Promise<void> },
   key: string,
